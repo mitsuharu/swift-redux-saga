@@ -91,7 +91,7 @@ swift-redux-saga
 ├── ReduxSwiftUI     SwiftUI 用ヘルパー（Redux）
 ├── ReduxUIKit       UIKit 用ヘルパー（Redux）
 ├── SagaTesting      TestClock、SagaTester、Action の記録（Saga）
-├── ReduxTesting     TestStore（Redux）
+├── ReduxTesting     TestStore（Redux + ReduxSaga + SagaTesting）
 ├── ReduxMacros      マクロ（任意・最後に追加。swift-syntax に依存）
 └── InternalPrimitives  内部で共有する部品（`Locked` など）。プロダクトにせず `package` アクセスで使う
 ```
@@ -103,7 +103,7 @@ Redux ◀── ReduxSaga ──▶ Saga
   ▲                       ▲
   ├── ReduxSwiftUI        └── SagaTesting
   ├── ReduxUIKit
-  └── ReduxTesting
+  └── ReduxTesting ──▶ ReduxSaga, SagaTesting
 ```
 
 - `Saga` は `Redux` に依存しない。Store とは [`SagaHost`](#62-sagahost-プロトコル) という小さなプロトコル越しにつながる。
@@ -810,7 +810,8 @@ Swift にはジェネレーターがないため、redux-saga の「Effect を 1
 | `TestClock` | `SagaTesting` | 手動で進める `Clock`。`advance(by:)` / `advance(to:)` |
 | `SagaTester` | `SagaTesting` | Store なしで Saga を動かす。`send` / `receive` / `advance(by:)` / `settle` / `finish` |
 | `SagaTesterFailure` | `SagaTesting` | 検証の失敗。テスト支援は Swift Testing を import せず、失敗を `throws` で返す |
-| `TestStore` | `ReduxTesting` | 本物の `Store` + ミドルウェアを使い、Action と State の変化を記録・検証する |
+| `TestStore` | `ReduxTesting` | 本物の `Store` + ミドルウェア（Saga を含む）を動かし、`send(_:assert:)` で reducer 直後の State を、`receive(_:assert:)` で Saga などが dispatch した Action とその後の State を順に検証する |
+| `TestStoreFailure` | `ReduxTesting` | 検証の失敗 |
 
 ### フレーキーにしないための仕組み
 

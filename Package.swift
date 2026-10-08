@@ -28,7 +28,10 @@ let package = Package(
     .target(name: "ReduxSwiftUI", dependencies: ["Redux"]),
     .target(name: "ReduxUIKit", dependencies: ["Redux"]),
     .target(name: "SagaTesting", dependencies: ["Saga", "InternalPrimitives"]),
-    .target(name: "ReduxTesting", dependencies: ["Redux"]),
+    .target(
+      name: "ReduxTesting",
+      dependencies: ["Redux", "ReduxSaga", "SagaTesting", "InternalPrimitives"]
+    ),
 
     .testTarget(name: "InternalPrimitivesTests", dependencies: ["InternalPrimitives"]),
     .testTarget(name: "ReduxTests", dependencies: ["Redux", "InternalPrimitives"]),
@@ -36,7 +39,7 @@ let package = Package(
     .testTarget(name: "ReduxSagaTests", dependencies: ["ReduxSaga", "SagaTesting"]),
     .testTarget(name: "ReduxSwiftUITests", dependencies: ["ReduxSwiftUI"]),
     .testTarget(name: "ReduxUIKitTests", dependencies: ["ReduxUIKit"]),
-    .testTarget(name: "ReduxTestingTests", dependencies: ["ReduxTesting"]),
+    .testTarget(name: "ReduxTestingTests", dependencies: ["ReduxTesting", "ReduxSaga", "Saga"]),
     // アプリが default MainActor isolation を有効にしていても使えることを確かめるテスト。
     .testTarget(
       name: "DefaultIsolationTests",
