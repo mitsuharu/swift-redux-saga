@@ -356,6 +356,7 @@ enum Counter: Slice {
 
 ```swift
 public struct Selector<State: Sendable, Output: Sendable>: Sendable {
+  public init(_ select: @escaping @Sendable (State) -> Output)   // メモ化しない
   public func callAsFunction(_ state: State) -> Output
 }
 
@@ -363,9 +364,13 @@ public func createSelector<State: Sendable, each Input: Equatable & Sendable, Ou
   _ inputs: repeat @escaping @Sendable (State) -> each Input,
   result: @escaping @Sendable (repeat each Input) -> Output
 ) -> Selector<State, Output>
+
+let visibleTodos = createSelector(\AppState.todos, \.filter) { todos, filter in ... }
 ```
 
-キャッシュは Saga（メインアクター外）からも使われるため、`Locked` で保護します。キャッシュサイズは 1（RTK の既定と同じ）。
+- キャッシュは Saga（メインアクター外）からも使われるため、`Locked` で保護する。キャッシュサイズは 1（RTK の既定と同じ）。`result` はロックの外で呼ぶ。
+- 入力はパラメータパックのまま保持せず、型を消した配列にして比較する。パックを持つジェネリック型の保存で Swift 6.3 のコンパイラがクラッシュするため。
+- クロージャで入力を渡す場合、State の型を推論できないことがあるため、キーパスで渡すか型を書く。
 
 ### 5.8 Entity Adapter（`createEntityAdapter` 相当）
 
