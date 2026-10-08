@@ -33,6 +33,7 @@ print(store.count)
 - ``Middleware``
 - ``MiddlewareAPI``
 - ``MiddlewareBuilder``
+- ``LoggingMiddleware``
 
 ### 入力欄の Binding
 

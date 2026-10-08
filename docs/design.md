@@ -334,6 +334,22 @@ public struct MiddlewareAPI<State: Sendable, Action: Sendable> {
 
 Saga を載せるミドルウェアはこの仕組みの上に `ReduxSaga` ターゲットで実装します（[7 章](#7-redux-と-saga-の接続)）。
 
+組み込みのミドルウェアとして `LoggingMiddleware` を用意します。
+
+```swift
+public struct LoggingMiddleware<State, Action>: Middleware {
+  public init(
+    isEnabled: Bool? = nil,          // 省略するとデバッグビルドでだけ出力する
+    logsState: Bool = false,         // 適用後の State も出すか
+    privacy: Privacy = .private,     // .private / .public
+    subsystem: String = "swift-redux-saga", category: String = "Redux",
+    filter: @escaping @Sendable (Action) -> Bool = { _ in true })
+}
+```
+
+- Apple OS では `os.Logger` の `debug` レベルで出力する（`print` を使わないのは、Console.app でフィルタでき、リリースビルドの負荷やログへの残り方を OS に任せられるため）。それ以外の OS では標準出力。
+- 値は既定で `.private`。Action や State は個人情報を含み得るため。
+
 ### 5.6 Slice（`createSlice` 相当）
 
 Swift では enum の case が「Action 作成関数」の役割を果たすため、Slice は State・Action・reducer を 1 つの名前空間にまとめるプロトコルとして定義します。

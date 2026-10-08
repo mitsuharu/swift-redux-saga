@@ -135,6 +135,8 @@ struct CounterView: View {
 
 #### 5. ミドルウェアを書き換える
 
+Action をログに出すだけなら、組み込みの `LoggingMiddleware` を使えます（デバッグビルドでだけ `os.Logger` に出力）。
+
 ```swift
 // Before（ReSwift）
 let loggingMiddleware: Middleware<AppState> = { dispatch, getState in
@@ -146,10 +148,13 @@ let loggingMiddleware: Middleware<AppState> = { dispatch, getState in
   }
 }
 
-// After
-struct LoggingMiddleware: Middleware {
+// After（組み込み）
+let store = Store(initialState: AppState(), reducer: appReducer, middleware: [LoggingMiddleware()])
+
+// After（自分で書く場合）
+struct AnalyticsMiddleware: Middleware {
   func handle(_ action: AppAction, store: MiddlewareAPI<AppState, AppAction>, next: (AppAction) -> Void) {
-    print(action)
+    analytics.track(action)
     next(action)
   }
 }
