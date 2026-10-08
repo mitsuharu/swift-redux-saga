@@ -20,7 +20,8 @@ public enum TodoFeature: Slice {
 
   public enum Action: Sendable, Equatable {
     // View から送る Action
-    case onAppear
+    /// 一覧を読み込み直す（引っぱって更新など）。起動時は Saga が自分で送る。
+    case refresh
     case draftChanged(String)
     case addTapped
     case toggleTapped(Todo.ID)
@@ -43,7 +44,7 @@ public enum TodoFeature: Slice {
 
   public static func reduce(into state: inout State, action: Action) {
     switch action {
-    case .onAppear:
+    case .refresh:
       state.isLoading = true
     case .draftChanged(let draft):
       state.draft = draft
@@ -91,7 +92,7 @@ public struct TodoSagas: Sendable {
 
   public var root: Saga<TodoFeature.State, TodoFeature.Action> {
     Saga("todo") { ctx in
-      ctx.takeLatest(.action(.onAppear)) { ctx, _ in
+      ctx.takeLatest(.action(.refresh)) { ctx, _ in
         await perform(ctx) { .loaded(try await ctx.call(useCase.load)) }
       }
       // 二重送信を防ぐため、追加の処理中に届いた addTapped は無視する。
@@ -116,6 +117,11 @@ public struct TodoSagas: Sendable {
           return .deleted(id)
         }
       }
+
+      // 起動時の読み込みは、View から送らずにルート Saga で始める。
+      // run の直後に外から dispatch すると、Saga が待ち始める前に届いて取りこぼすことがあるため
+      // （設計書 7 章「起動直後の Action」）。ヘルパーは呼び出した時点で購読を始めているので、ここで put すれば届く。
+      await ctx.put(.refresh)
     }
   }
 

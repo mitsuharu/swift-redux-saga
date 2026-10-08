@@ -33,9 +33,10 @@ private func makeStore(_ todos: [Todo] = [milk, bread]) -> TestStore<
 
 @MainActor
 @Suite struct TodoFeatureTests {
-  @Test func onAppearLoadsTodosInCreationOrder() async throws {
+  @Test func theSagaLoadsTodosOnStartInCreationOrder() async throws {
     let store = makeStore()
-    try await store.send(.onAppear) { $0.isLoading = true }
+    await store.settle()
+    try store.receive(.refresh) { $0.isLoading = true }
     try store.receive(.loaded([milk, bread])) {
       $0.isLoading = false
       $0.todos.ids = [milk.id, bread.id]
@@ -44,8 +45,19 @@ private func makeStore(_ todos: [Todo] = [milk, bread]) -> TestStore<
     try await store.finish()
   }
 
+  @Test func refreshReloadsTodos() async throws {
+    let store = makeStore()
+    await store.settle()
+    store.skipReceivedActions()
+    try await store.send(.refresh) { $0.isLoading = true }
+    try store.receive(.case { if case .loaded = $0 { () } else { nil } }) { $0.isLoading = false }
+    try await store.finish()
+  }
+
   @Test func addTappedAddsTheDraftAndClearsIt() async throws {
     let store = makeStore([])
+    await store.settle()
+    store.skipReceivedActions()
     try await store.send(.draftChanged("eggs")) { $0.draft = "eggs" }
     try await store.send(.addTapped)
     let added = try store.receive(.case { if case .added(let todo) = $0 { todo } else { nil } })
@@ -57,7 +69,7 @@ private func makeStore(_ todos: [Todo] = [milk, bread]) -> TestStore<
 
   @Test func toggleTappedSavesTheToggledTodo() async throws {
     let store = makeStore()
-    try await store.send(.onAppear)
+    await store.settle()
     store.skipReceivedActions()
     try await store.send(.toggleTapped(milk.id))
     var done = milk
@@ -68,7 +80,7 @@ private func makeStore(_ todos: [Todo] = [milk, bread]) -> TestStore<
 
   @Test func deleteTappedRemovesTheTodo() async throws {
     let store = makeStore()
-    try await store.send(.onAppear)
+    await store.settle()
     store.skipReceivedActions()
     try await store.send(.deleteTapped(milk.id))
     try store.receive(.deleted(milk.id)) {
@@ -80,7 +92,7 @@ private func makeStore(_ todos: [Todo] = [milk, bread]) -> TestStore<
 
   @Test func searchIsAppliedAfterTypingStops() async throws {
     let store = makeStore()
-    try await store.send(.onAppear)
+    await store.settle()
     store.skipReceivedActions()
     try await store.send(.queryChanged("m")) { $0.query = "m" }
     await store.advance(by: .milliseconds(200))
@@ -97,7 +109,8 @@ private func makeStore(_ todos: [Todo] = [milk, bread]) -> TestStore<
       reducer: TodoFeature.reducer,
       saga: TodoSagas(useCase: TodoUseCase(repository: FailingRepository())).root
     )
-    try await store.send(.onAppear) { $0.isLoading = true }
+    await store.settle()
+    try store.receive(.refresh) { $0.isLoading = true }
     try store.receive(.failed("offline")) {
       $0.isLoading = false
       $0.errorMessage = "offline"
