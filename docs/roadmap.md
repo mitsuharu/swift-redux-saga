@@ -47,7 +47,7 @@
 
 | # | ブランチ | 内容 |
 | --- | --- | --- |
-| 4-1 | `feature/saga-channels` | `SagaChannel`、`actionChannel`（バッファ方式の指定）、`eventChannel`（購読関数版、AsyncSequence 版）+ テスト（4-2 を統合） |
+| 4-1 | `feature/saga-channels` | `SagaChannel`、`actionChannel`（バッファ方式の指定）、`eventChannel`（購読関数版、AsyncSequence 版）+ テスト（4-2 を統合） （[#20](https://github.com/mitsuharu/swift-redux-saga/pull/20)） |
 
 ## M5: Redux Toolkit 相当
 
