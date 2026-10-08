@@ -87,3 +87,42 @@ extension Store {
     onChange(value)
   }
 }
+
+extension ObservationToken {
+  /// `read` の中で読んだ Observable な値（ViewModel や Store）を、すぐに 1 回、その後は変わるたびに `onChange` に渡します。
+  ///
+  /// ``Store/observe(_:onChange:)`` と同じ仕組みで、Store 以外（MVVM の ViewModel など）にも使えます。
+  /// UIKit で iOS 26 未満の OS に対応するときに使います。
+  ///
+  /// ```swift
+  /// ObservationToken.observe { [weak viewModel] in viewModel?.todos ?? [] } onChange: { [weak self] todos in
+  ///   self?.apply(todos)
+  /// }
+  /// .retained(by: self)
+  /// ```
+  ///
+  /// `read` は購読が続く間保持されます。ViewModel などを強参照しないよう `[weak ...]` で読んでください。
+  public static func observe<Value>(
+    _ read: @escaping @MainActor () -> Value,
+    onChange: @escaping @MainActor (Value) -> Void
+  ) -> ObservationToken {
+    let token = ObservationToken()
+    track(token: token, read: read, onChange: onChange)
+    return token
+  }
+
+  private static func track<Value>(
+    token: ObservationToken?,
+    read: @escaping @MainActor () -> Value,
+    onChange: @escaping @MainActor (Value) -> Void
+  ) {
+    guard let token, !token.isCancelled else { return }
+    let value = withObservationTracking(read) { [weak token] in
+      // Store.observe と同じく、変更後にメインアクターで読み直す。
+      Task { @MainActor in
+        track(token: token, read: read, onChange: onChange)
+      }
+    }
+    onChange(value)
+  }
+}
