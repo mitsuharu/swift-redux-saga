@@ -1,5 +1,7 @@
+# 依存の更新は Dependabot に任せる。
 version: 2
 updates:
+  # GitHub Actions はコミット SHA で固定している（AGENTS.md）。頻繁に変わるものではないので月 1 回。
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -10,3 +12,12 @@ updates:
       github-actions:
         patterns:
           - "*"
+
+  # swift-syntax（マクロの実装だけが使う）。Swift のリリースに合わせて新しい版が出るので週 1 回。
+  # Package.swift の版の範囲（"600.0.0"..<"605.0.0"）の上限を超えた版が出たら、範囲を広げる PR が作られる。
+  - package-ecosystem: swift
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
