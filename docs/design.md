@@ -482,8 +482,8 @@ public struct Saga<State: Sendable, Action: Sendable>: Sendable {
   /// 現在のコンテキストで本体を実行する（ほかの Saga の中から呼び出す場合）。
   public func run(_ context: SagaContext<State, Action>) async throws
 
-  /// 複数の Saga を並行に実行する（内部で `all`）。
-  public static func combine(_ sagas: Saga...) -> Saga
+  /// 複数の Saga を並行に実行する（それぞれを fork する）。
+  public static func combine(_ sagas: Saga..., name: String? = nil) -> Saga
 }
 
 /// Effect を提供する。Sendable な値型で、内部でランタイムと現在のスコープを参照する。
@@ -591,7 +591,7 @@ enum CounterSagas {
 }
 ```
 
-`Saga` 型には、複数の Saga をまとめる `Saga.combine(_:)`（内部で `all` を使う）も用意し、上の組み立てを `Saga.combine(userSagas.root, todoSagas.root)` と書けるようにします。
+`Saga` 型には、複数の Saga をまとめる `Saga.combine(_:name:)`（それぞれを fork する）も用意し、上の組み立てを `Saga.combine(userSagas.root, todoSagas.root)` と書けるようにします。
 
 ### 6.4 Action のマッチング
 
@@ -632,9 +632,9 @@ extension ActionPattern where Value == Action, Action: Equatable {
 | `put` | `func put(_ action: Action) async` | reducer 適用後に戻る |
 | `select` | `func select<T: Sendable>(_ s: @Sendable (State) -> T) async -> T` / `func select() async -> State` | |
 | `call` | `func call<each A: Sendable, R: Sendable>(_ f: @Sendable (repeat each A) async throws -> R, _ args: repeat each A) async throws -> R` | 任意の async 関数を呼ぶ |
-| `fork` | `func fork(_ body: ...) -> SagaTask` | attached。親のキャンセルが伝播し、子のエラーは親に伝播する |
-| `spawn` | `func spawn(_ body: ...) -> SagaTask` | detached。ランタイム停止時のみキャンセルされる |
-| `cancel` | `SagaTask.cancel()` | |
+| `fork` | `func fork(_ saga: Saga) -> SagaTask` / `func fork(_ name: String?, _ body:) -> SagaTask` | attached。親のキャンセルが伝播し、子のエラーは親に伝播する |
+| `spawn` | `func spawn(_ saga: Saga) -> SagaTask` / `func spawn(_ name: String?, _ body:) -> SagaTask` | detached。ランタイム停止時のみキャンセルされる |
+| `cancel` | `ctx.cancel(_ task:)` / `SagaTask.cancel()` | 子をキャンセルしても親にエラーは伝わらない |
 | `join` | `ctx.join(_ task: SagaTask) async throws` | Saga の外からは `SagaTask.join()` |
 | `cancelled` | `ctx.isCancelled` / `Task.isCancelled` | |
 | `delay` | `func delay(_ duration: Duration) async throws` | ランタイムに注入した `Clock` を使う |
@@ -657,7 +657,8 @@ extension ActionPattern where Value == Action, Action: Equatable {
   - キューに `AsyncStream` を使わないのは、親がキャンセルされると iteration が終わり、積まれた要求が起動されずに残る（join した側が永久に待つ）ため。`ForkQueue` はキャンセルされても閉じられるまで要求を渡す。
 - 親（Saga 本体）は、本体が終わってもすべての子が終わるまで完了しない（redux-saga と同じ）。
 - 子が未処理のエラーで終わるとグループが失敗し、兄弟と親がキャンセルされ、エラーが親に伝播する。
-- 個々の子を `SagaTask.cancel()` で止めるため、子は自分用のキャンセル信号を持ち、信号を受けたら自身の内側のタスクグループをキャンセルする。
+- 個々の子を `SagaTask.cancel()` で止めるため、子は自分用のキャンセル信号（`CancelSignal`）を持ち、内側のタスクグループで本体と信号の待機を競わせる。信号が先に来たら本体をキャンセルし、本体の結果を待ってから終わる（待たずに抜けると、本体の `CancellationError` が捨てられて完了と区別できないため）。
+- 子のキャンセル（個別のキャンセル、親からのキャンセル）は親にエラーとして伝えない。子の失敗だけを伝える。
 - `spawn` はランタイムが持つルートスコープに子を追加する。呼び出し元の親とは切り離されるが、ランタイムの停止（Store の破棄など）でキャンセルされる。`Task.detached` は使わない。
 
 ### 6.7 take の配信方式

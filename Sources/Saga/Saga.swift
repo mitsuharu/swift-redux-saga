@@ -43,4 +43,14 @@ public struct Saga<State: Sendable, Action: Sendable>: Sendable {
     try await body(context)
   }
 
+  /// 複数の Saga を並行に実行する Saga を作ります。
+  ///
+  /// 各 Saga は fork され、すべてが終わると完了します。いずれかが失敗すると、残りはキャンセルされます。
+  public static func combine(_ sagas: Saga..., name: String? = nil) -> Saga {
+    Saga(name) { context in
+      for saga in sagas {
+        context.fork(saga)
+      }
+    }
+  }
 }
