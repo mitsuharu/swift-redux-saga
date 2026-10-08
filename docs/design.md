@@ -375,24 +375,31 @@ extension EntityAdapter where Entity: Identifiable, ID == Entity.ID {
 
 ### 5.9 OS に依存しない購読 API
 
-UIKit やテスト、SwiftUI 以外から State の変化を受け取るための API です。
+UIKit やテスト、SwiftUI 以外から State の変化を受け取るための API です。iOS 17 以降で動きます（`withObservationTracking` を使う）。
 
 ```swift
 extension Store {
-  /// `read` の中で読んだ値が変わるたびに `onChange` を呼ぶ。トークンを破棄すると購読を解除する。
-  /// iOS 17 以降で動く（`withObservationTracking` を使う）。
-  public func observe<Value: Sendable>(
+  /// `read` の中で読んだ値を、すぐに 1 回、その後は変わるたびに `onChange` に渡す。
+  /// トークンを cancel するか解放すると購読を解除する。
+  public func observe<Value>(
     _ read: @escaping @MainActor (Store) -> Value,
     onChange: @escaping @MainActor (Value) -> Void
   ) -> ObservationToken
 
-  /// 値の変化を AsyncSequence として受け取る。
-  /// iOS 26 以降は `Observations` を使い、それ以前は `withObservationTracking` で実装したものを使う。
+  /// 値の変化を AsyncStream として受け取る（最新の値だけをバッファする）。
   public func values<Value: Sendable>(
     _ read: @escaping @MainActor (Store) -> Value
-  ) -> some AsyncSequence<Value, Never>
+  ) -> AsyncStream<Value>
+}
+
+@MainActor public final class ObservationToken {
+  public func cancel()
 }
 ```
+
+- 変化の通知は、変更が終わった後にメインアクター上で非同期に届く。`withObservationTracking` の onChange は変更の直前に呼ばれ、新しい値を読めないため。続けて変更された場合は最後の値だけが届くことがある。
+- iOS 26 以降でも `Observations` を使わず、同じ実装を使う。OS によって通知のタイミングが変わらないようにするため。iOS 26 以降のアプリは `Observations { store.count }` を直接使ってもよい（Store は `Observable` なので、そのまま動く）。
+- 購読は Store とトークンを弱参照で持ち、Store や呼び出し元を延命しない。
 
 ---
 
