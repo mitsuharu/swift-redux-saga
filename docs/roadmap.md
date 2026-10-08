@@ -85,3 +85,10 @@
 | # | ブランチ | 内容 |
 | --- | --- | --- |
 | 9-1 | `docs/readme` | README（使い方、redux-saga とのテスト方法の違い、default isolation の注意）、DocC カタログ、ReSwift-Saga からの移行ガイド（9-2、9-3 を統合） （[#31](https://github.com/mitsuharu/swift-redux-saga/pull/31)） |
+
+## M10: 追加の機能
+
+| # | ブランチ | 内容 |
+| --- | --- | --- |
+| 10-1 | `feature/binding-action` | 入力欄の Binding（`BindableState` / `BindingAction` / `BindableAction`） |
+| 10-2 | `feature/nested-observation` | ネストしたプロパティ単位の Observation 追跡（マクロ） |

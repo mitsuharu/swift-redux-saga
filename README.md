@@ -200,7 +200,21 @@ struct CounterView: View {
   }
 }
 
-// 親で .store(store) を付ける。入力欄は store.binding(\.text, send: { .textChanged($0) }) で作れる。
+// 親で .store(store) を付ける。
+```
+
+`TextField` や `Toggle` など、値を書き戻すだけの入力欄は、State のプロパティに `@BindableState` を付け、Action に `case binding(BindingAction<State>)` を用意すると、部品ごとに Action を書かずに済みます。
+
+```swift
+struct State: Sendable, Equatable {
+  @BindableState var draft = ""
+}
+enum Action: Sendable, BindableAction {
+  case binding(BindingAction<State>)
+}
+// reducer: case .binding(let binding): binding.apply(to: &state)（または Reducer.binding を並べる）
+
+TextField("New ToDo", text: store.binding(\.$draft))
 ```
 
 ### UIKit
