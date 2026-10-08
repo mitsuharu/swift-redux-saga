@@ -76,3 +76,11 @@ let package = Package(
   ],
   swiftLanguageModes: [.v6]
 )
+
+// このパッケージのターゲットでは警告をエラーにする（「警告ゼロ」を保つため）。
+// コマンドラインの -warnings-as-errors を使わないのは、xcodebuild では依存の swift-syntax にも効き、
+// swift-syntax 側の -suppress-warnings と衝突してビルドできないため。
+// この設定は、利用者がこのパッケージを依存として使うときには無視される（SE-0480）。
+for target in package.targets {
+  target.swiftSettings = (target.swiftSettings ?? []) + [.treatAllWarnings(as: .error)]
+}

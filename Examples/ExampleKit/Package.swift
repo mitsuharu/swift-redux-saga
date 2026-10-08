@@ -24,6 +24,7 @@ let package = Package(
         .product(name: "Redux", package: "swift-redux-saga"),
         .product(name: "Saga", package: "swift-redux-saga"),
         .product(name: "ReduxSaga", package: "swift-redux-saga"),
+        .product(name: "ReduxMacros", package: "swift-redux-saga"),
       ]
     ),
     .testTarget(name: "DomainTests", dependencies: ["Domain"]),
@@ -38,3 +39,8 @@ let package = Package(
   ],
   swiftLanguageModes: [.v6]
 )
+
+// 警告をエラーにする（理由はルートの Package.swift を参照）。
+for target in package.targets {
+  target.swiftSettings = (target.swiftSettings ?? []) + [.treatAllWarnings(as: .error)]
+}
