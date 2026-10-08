@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "LICENSE"
+  pull_request:
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "LICENSE"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # macos-26 runner image (actions/runner-images, macos-26-arm64 Readme).
+  # Xcode 26.6 / Swift 6.3 is the default Xcode on the image.
+  DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+  IOS_SIMULATOR: platform=iOS Simulator,name=iPhone 17,OS=26.5
+
+jobs:
+  format:
+    name: Format
+    runs-on: ubuntu-24.04
+    container: swift:6.3.3-noble
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: swift format lint
+        run: |
+          paths="Package.swift"
+          for dir in Sources Tests Examples; do
+            if [ -d "$dir" ]; then paths="$paths $dir"; fi
+          done
+          swift format lint --strict --recursive --parallel $paths
+
+  macos:
+    name: macOS (SwiftPM)
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+      - uses: actions/cache@v6
+        with:
+          path: .build
+          key: spm-macos-${{ hashFiles('Package.swift', 'Package.resolved') }}-${{ hashFiles('Sources/**', 'Tests/**') }}
+          restore-keys: |
+            spm-macos-${{ hashFiles('Package.swift', 'Package.resolved') }}-
+      - name: Build
+        run: swift build --build-tests -Xswiftc -warnings-as-errors
+      - name: Test
+        if: hashFiles('Tests/**') != ''
+        run: swift test --skip-build
+
+  ios:
+    name: iOS Simulator (xcodebuild)
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Resolve scheme
+        id: scheme
+        run: |
+          # A package with several products gets a "<package>-Package" scheme.
+          schemes=$(xcodebuild -list -json | jq -r '.workspace.schemes[]')
+          echo "$schemes"
+          scheme=$(echo "$schemes" | grep -E -- '-Package$' || true)
+          if [ -z "$scheme" ]; then scheme=$(echo "$schemes" | head -n 1); fi
+          echo "name=$scheme" >> "$GITHUB_OUTPUT"
+      - name: Build
+        if: hashFiles('Tests/**') == ''
+        run: |
+          xcodebuild build \
+            -scheme "${{ steps.scheme.outputs.name }}" \
+            -destination "generic/platform=iOS Simulator" \
+            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES
+      - name: Build and test
+        if: hashFiles('Tests/**') != ''
+        run: |
+          xcodebuild test \
+            -scheme "${{ steps.scheme.outputs.name }}" \
+            -destination "$IOS_SIMULATOR" \
+            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES
+
+  linux:
+    name: Linux
+    runs-on: ubuntu-24.04
+    container: swift:6.3.3-noble
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v6
+        with:
+          path: .build
+          key: spm-linux-${{ hashFiles('Package.swift', 'Package.resolved') }}-${{ hashFiles('Sources/**', 'Tests/**') }}
+          restore-keys: |
+            spm-linux-${{ hashFiles('Package.swift', 'Package.resolved') }}-
+      - name: Build
+        run: swift build --build-tests -Xswiftc -warnings-as-errors
+      - name: Test
+        if: hashFiles('Tests/**') != ''
+        run: swift test --skip-build
