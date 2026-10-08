@@ -1,29 +1,50 @@
+# swift-redux-saga の CI。
+#
+# PR ごとに次の 4 ジョブを並列に実行する。
+#   - Format: swift format による lint
+#   - macOS:  SwiftPM でのビルドとテスト
+#   - iOS:    xcodebuild で iOS シミュレータ向けのビルドとテスト
+#   - Linux:  UI に依存しないターゲットのビルドとテスト
+#
+# アクションはタグではなくコミット SHA で固定している（ルールは AGENTS.md）。
+# 更新は Dependabot（.github/dependabot.yml）に任せる。
+
 name: CI
 
 on:
+  # main への push では実行しない。main には PR 経由でしか入らず、
+  # マージ前に同じ内容で CI が通っているため、二重に macOS runner を使わない。
   pull_request:
     types: [opened, synchronize, reopened]
+    # ドキュメントだけの変更ではビルド結果が変わらないため実行しない。
     paths-ignore:
       - "**.md"
       - "docs/**"
       - "LICENSE"
 
+# 同じ PR に新しいコミットが積まれたら、古い実行は結果が不要になるのでキャンセルする。
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
+# 読み取りだけで足りるので、GITHUB_TOKEN の権限を最小にする。
 permissions:
   contents: read
 
 env:
-  # macos-26 runner image (actions/runner-images, macos-26-arm64 Readme).
-  # Xcode 26.6 / Swift 6.3 is the default Xcode on the image.
+  # Xcode を明示的に選ぶ。runner の既定の Xcode は予告付きで切り替わるため、
+  # 既定に任せるとツールチェーンが知らないうちに変わる。
+  # バージョンは推測ではなく actions/runner-images の macos-26-arm64 Readme で確認したもの
+  # （Xcode 26.6 / Swift 6.3）。
   DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+  # 同じ Readme で、Xcode 26.6 にインストール済みと確認したシミュレータ。
   IOS_SIMULATOR: platform=iOS Simulator,name=iPhone 17,OS=26.5
 
 jobs:
   format:
     name: Format
+    # lint に macOS は不要なので、安価な Linux で実行する。
+    # 外部ツール（SwiftFormat / SwiftLint）ではなく、ツールチェーン同梱の swift format を使う。
     runs-on: ubuntu-24.04
     container: swift:6.3.3-noble
     timeout-minutes: 10
@@ -31,6 +52,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: swift format lint
         run: |
+          # まだ存在しないディレクトリを渡すと swift format がエラーになるため、あるものだけ渡す。
           paths="Package.swift"
           for dir in Sources Tests Examples; do
             if [ -d "$dir" ]; then paths="$paths $dir"; fi
@@ -47,20 +69,25 @@ jobs:
         run: |
           xcodebuild -version
           swift --version
+      # ソースが変わっていなくても依存の解決とビルドに時間がかかるため、.build をキャッシュする。
+      # ソースが変わった場合も restore-keys で直近のキャッシュから差分ビルドする。
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .build
           key: spm-macos-${{ hashFiles('Package.swift', 'Package.resolved') }}-${{ hashFiles('Sources/**', 'Tests/**') }}
           restore-keys: |
             spm-macos-${{ hashFiles('Package.swift', 'Package.resolved') }}-
+      # 「警告ゼロ」を CI で保証するため、警告をエラーとして扱う。
       - name: Build
         run: swift build --build-tests -Xswiftc -warnings-as-errors
+      # テストターゲットがないと swift test は失敗するため、Tests ができるまでは実行しない。
       - name: Test
         if: hashFiles('Tests/**') != ''
         run: swift test --skip-build
 
   ios:
     name: iOS Simulator (xcodebuild)
+    # SwiftPM だけでは iOS 向けにビルドできないため、xcodebuild を使う。
     runs-on: macos-26
     timeout-minutes: 30
     steps:
@@ -68,12 +95,14 @@ jobs:
       - name: Resolve scheme
         id: scheme
         run: |
-          # A package with several products gets a "<package>-Package" scheme.
+          # スキーム名を固定で書かない。プロダクトが 1 つのときはパッケージ名、
+          # 複数になると "<パッケージ名>-Package" になり、ターゲット追加のたびに壊れるため。
           schemes=$(xcodebuild -list -json | jq -r '.workspace.schemes[]')
           echo "$schemes"
           scheme=$(echo "$schemes" | grep -E -- '-Package$' || true)
           if [ -z "$scheme" ]; then scheme=$(echo "$schemes" | head -n 1); fi
           echo "name=$scheme" >> "$GITHUB_OUTPUT"
+      # テストがない間はシミュレータを起動する必要がないので、汎用の宛先でビルドだけ行う。
       - name: Build
         if: hashFiles('Tests/**') == ''
         run: |
@@ -91,6 +120,8 @@ jobs:
 
   linux:
     name: Linux
+    # Saga / Redux のコアは Apple 以外でも動くことを保証したい。macOS より安価でもある。
+    # runner に入っている Swift ではなく公式コンテナを使い、バージョンを固定する。
     runs-on: ubuntu-24.04
     container: swift:6.3.3-noble
     timeout-minutes: 20
