@@ -1,0 +1,108 @@
+import AppFeature
+import Domain
+import Foundation
+import ReduxTesting
+import Testing
+
+/// 失敗を返すリポジトリ。
+private struct FailingRepository: TodoRepository {
+  struct Failure: LocalizedError {
+    var errorDescription: String? { "offline" }
+  }
+
+  func fetchAll() async throws -> [Todo] { throw Failure() }
+  func save(_ todo: Todo) async throws { throw Failure() }
+  func delete(id: Todo.ID) async throws { throw Failure() }
+}
+
+private let milk = Todo(title: "milk", createdAt: Date(timeIntervalSince1970: 0))
+private let bread = Todo(title: "bread", createdAt: Date(timeIntervalSince1970: 1))
+
+@MainActor
+private func makeStore(_ todos: [Todo] = [milk, bread]) -> TestStore<
+  TodoFeature.State, TodoFeature.Action
+> {
+  // テストではリポジトリの遅れをなくし、Saga の待ち合わせだけで進める。
+  let useCase = TodoUseCase(repository: InMemoryTodoRepository(todos: todos, latency: .zero))
+  return TestStore(
+    initialState: TodoFeature.initialState,
+    reducer: TodoFeature.reducer,
+    saga: TodoSagas(useCase: useCase).root
+  )
+}
+
+@MainActor
+@Suite struct TodoFeatureTests {
+  @Test func onAppearLoadsTodosInCreationOrder() async throws {
+    let store = makeStore()
+    try await store.send(.onAppear) { $0.isLoading = true }
+    try store.receive(.loaded([milk, bread])) {
+      $0.isLoading = false
+      $0.todos.ids = [milk.id, bread.id]
+      $0.todos.entities = [milk.id: milk, bread.id: bread]
+    }
+    try await store.finish()
+  }
+
+  @Test func addTappedAddsTheDraftAndClearsIt() async throws {
+    let store = makeStore([])
+    try await store.send(.draftChanged("eggs")) { $0.draft = "eggs" }
+    try await store.send(.addTapped)
+    let added = try store.receive(.case { if case .added(let todo) = $0 { todo } else { nil } })
+    #expect(added.title == "eggs")
+    #expect(store.state.draft == "")
+    #expect(TodoFeature.visibleTodos(store.state).map(\.title) == ["eggs"])
+    try await store.finish()
+  }
+
+  @Test func toggleTappedSavesTheToggledTodo() async throws {
+    let store = makeStore()
+    try await store.send(.onAppear)
+    store.skipReceivedActions()
+    try await store.send(.toggleTapped(milk.id))
+    var done = milk
+    done.isDone = true
+    try store.receive(.updated(done)) { $0.todos.entities[milk.id] = done }
+    try await store.finish()
+  }
+
+  @Test func deleteTappedRemovesTheTodo() async throws {
+    let store = makeStore()
+    try await store.send(.onAppear)
+    store.skipReceivedActions()
+    try await store.send(.deleteTapped(milk.id))
+    try store.receive(.deleted(milk.id)) {
+      $0.todos.ids = [bread.id]
+      $0.todos.entities[milk.id] = nil
+    }
+    try await store.finish()
+  }
+
+  @Test func searchIsAppliedAfterTypingStops() async throws {
+    let store = makeStore()
+    try await store.send(.onAppear)
+    store.skipReceivedActions()
+    try await store.send(.queryChanged("m")) { $0.query = "m" }
+    await store.advance(by: .milliseconds(200))
+    try await store.send(.queryChanged("mi")) { $0.query = "mi" }
+    await store.advance(by: .milliseconds(300))
+    try store.receive(.queryApplied("mi")) { $0.appliedQuery = "mi" }
+    #expect(TodoFeature.visibleTodos(store.state) == [milk])
+    try await store.finish()
+  }
+
+  @Test func failureIsShownAsAnErrorMessage() async throws {
+    let store = TestStore(
+      initialState: TodoFeature.initialState,
+      reducer: TodoFeature.reducer,
+      saga: TodoSagas(useCase: TodoUseCase(repository: FailingRepository())).root
+    )
+    try await store.send(.onAppear) { $0.isLoading = true }
+    try store.receive(.failed("offline")) {
+      $0.isLoading = false
+      $0.errorMessage = "offline"
+    }
+    try await store.send(.errorDismissed) { $0.errorMessage = nil }
+    try await store.finish()
+  }
+}

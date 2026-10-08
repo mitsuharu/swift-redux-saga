@@ -5,6 +5,7 @@
 #   - macOS:  SwiftPM でのビルドとテスト
 #   - iOS:    xcodebuild で iOS シミュレータ向けのビルドとテスト
 #   - Linux:  UI に依存しないターゲットのビルドとテスト
+#   - Examples: サンプルアプリのロジック（Examples/ExampleKit）のビルドとテスト
 #
 # アクションはタグではなくコミット SHA で固定している（ルールは AGENTS.md）。
 # 更新は Dependabot（.github/dependabot.yml）に任せる。
@@ -159,4 +160,25 @@ jobs:
         run: swift build --build-tests -Xswiftc -warnings-as-errors
       - name: Test
         if: hashFiles('Tests/**') != ''
+        run: swift test --skip-build
+
+  examples:
+    name: Examples
+    # サンプルのロジックはライブラリの使い方の見本なので、ライブラリの変更で壊れていないかを確かめる。
+    runs-on: macos-26
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: Examples/ExampleKit
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: Examples/ExampleKit/.build
+          key: spm-examples-${{ hashFiles('Package.swift', 'Examples/ExampleKit/Package.swift') }}-${{ hashFiles('Sources/**', 'Examples/**') }}
+          restore-keys: |
+            spm-examples-${{ hashFiles('Package.swift', 'Examples/ExampleKit/Package.swift') }}-
+      - name: Build
+        run: swift build --build-tests -Xswiftc -warnings-as-errors
+      - name: Test
         run: swift test --skip-build
