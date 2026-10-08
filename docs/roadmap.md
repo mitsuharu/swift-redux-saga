@@ -32,7 +32,7 @@
 | 2-5 | `feature/saga-fork` | `fork` / `spawn` / `SagaTask.cancel` / `join` / `isCancelled`、キャンセル伝播 + テスト （[#13](https://github.com/mitsuharu/swift-redux-saga/pull/13)） |
 | 2-6 | `feature/saga-errors` | エラー伝播、`onError`、`SagaMonitor` + テスト （[#14](https://github.com/mitsuharu/swift-redux-saga/pull/14)） |
 | 2-7 | `feature/saga-testing` | `SagaTesting`: `TestClock`、`SagaTester`、`settle()`、`delay`（3-1 を統合）+ テスト （[#15](https://github.com/mitsuharu/swift-redux-saga/pull/15)） |
-| 2-8 | `feature/saga-middleware` | `ReduxSaga`: `SagaMiddleware`、Host の実装 + テスト |
+| 2-8 | `feature/saga-middleware` | `ReduxSaga`: `SagaMiddleware`、Host の実装 + テスト （[#16](https://github.com/mitsuharu/swift-redux-saga/pull/16)） |
 
 ## M3: Saga ヘルパー
 
