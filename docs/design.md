@@ -265,24 +265,31 @@ dispatch の処理中に `dispatch` が呼ばれた場合（ミドルウェア�
 ### 5.5 Middleware
 
 ```swift
+@MainActor
 public protocol Middleware<State, Action> {
   associatedtype State: Sendable
   associatedtype Action: Sendable
 
-  /// Store の生成直後に 1 回呼ばれる。
-  @MainActor func attach(to store: MiddlewareAPI<State, Action>)
+  /// Store の生成時に 1 回呼ばれる（既定の実装は何もしない）。
+  func attach(to store: MiddlewareAPI<State, Action>)
 
   /// Action ごとに呼ばれる。`next` を呼ぶと次のミドルウェア（最後は reducer）に進む。
-  @MainActor func handle(_ action: Action, store: MiddlewareAPI<State, Action>, next: (Action) -> Void)
+  func handle(_ action: Action, store: MiddlewareAPI<State, Action>, next: (Action) -> Void)
 }
 
-/// ミドルウェアに渡す Store の窓口。Store を強参照しない。
+/// ミドルウェアに渡す Store の窓口。Store を弱参照で持つ。
 @MainActor
 public struct MiddlewareAPI<State: Sendable, Action: Sendable> {
+  public var isStoreAlive: Bool { get }
+  /// Observation の追跡対象にならない。Store の解放後に読むと停止する。
   public var state: State { get }
+  /// handle の中から呼んだ場合は、処理中の Action の後に処理される。Store の解放後は何もしない。
   public func dispatch(_ action: Action)
 }
 ```
+
+- プロトコル全体を `@MainActor` にするのは、Store と同じ隔離で同期に呼ぶため。
+- `next` をエスケープしないクロージャにしているのは、reducer への到達を `handle` の中に限定し、非同期に `next` を呼べないようにするため。非同期の処理は `MiddlewareAPI.dispatch` で新しい Action として流す。
 
 Saga を載せるミドルウェアはこの仕組みの上に `ReduxSaga` ターゲットで実装します（[7 章](#7-redux-と-saga-の接続)）。
 
