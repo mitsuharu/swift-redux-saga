@@ -175,6 +175,12 @@ nonisolated struct AppState: Sendable, Equatable {
 }
 ```
 
+Action 専用のプロトコル（`protocol Action: Sendable` など）を設けない理由:
+
+- `Saga` は `Redux` に依存しないため、プロトコルを両方で必要とし、別々に定義すると利用側が二重に準拠させることになる。
+- ReSwift 用アダプタなどでは Action が `any ReSwift.Action` のような存在型になり、存在型は自前のプロトコルに準拠できないため、Saga のコアで使えなくなる。
+- `Equatable` を必須にすると、`case failed(any Error)` のように Equatable でない値を Action に載せられなくなる。比較が必要なテストでは、利用側が `Equatable` に準拠させればよい。
+
 `Store<State, Action>` の `Action` には、enum のほか、プロトコル存在型（`any AppActionProtocol`）も使えます。RTK のように「Action ごとに型を分ける」スタイルを取りたい場合は後者を使い、[型による判定](#64-action-のマッチング)を利用します。
 
 ### 5.2 Reducer
