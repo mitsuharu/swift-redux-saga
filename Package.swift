@@ -20,6 +20,7 @@ let package = Package(
     .library(name: "SagaTesting", targets: ["SagaTesting"]),
     .library(name: "ReduxTesting", targets: ["ReduxTesting"]),
     .library(name: "ReduxMacros", targets: ["ReduxMacros"]),
+    .library(name: "ReduxPersistence", targets: ["ReduxPersistence"]),
   ],
   dependencies: [
     // マクロ（ReduxMacros）の実装にだけ使う。範囲を広く取るのは、利用者の Xcode / ツールチェーンに
@@ -48,6 +49,8 @@ let package = Package(
       ]
     ),
     .target(name: "ReduxMacros", dependencies: ["Redux", "ReduxMacrosPlugin"]),
+    // State の永続化。Foundation（JSON / ファイル / UserDefaults）を使うので、Redux 本体から分ける。
+    .target(name: "ReduxPersistence", dependencies: ["Redux", "InternalPrimitives"]),
 
     .testTarget(name: "InternalPrimitivesTests", dependencies: ["InternalPrimitives"]),
     .testTarget(name: "ReduxTests", dependencies: ["Redux", "InternalPrimitives"]),
@@ -55,6 +58,10 @@ let package = Package(
     .testTarget(name: "ReduxSagaTests", dependencies: ["ReduxSaga", "SagaTesting"]),
     .testTarget(name: "ReduxSwiftUITests", dependencies: ["ReduxSwiftUI", "InternalPrimitives"]),
     .testTarget(name: "ReduxUIKitTests", dependencies: ["ReduxUIKit"]),
+    .testTarget(
+      name: "ReduxPersistenceTests",
+      dependencies: ["ReduxPersistence", "SagaTesting", "InternalPrimitives"]
+    ),
     .testTarget(name: "ReduxTestingTests", dependencies: ["ReduxTesting", "ReduxSaga", "Saga"]),
     .testTarget(
       name: "ReduxMacrosTests",

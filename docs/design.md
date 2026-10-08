@@ -92,6 +92,7 @@ swift-redux-saga
 ├── ReduxUIKit       UIKit 用ヘルパー（Redux）
 ├── SagaTesting      TestClock、SagaTester、Action の記録（Saga）
 ├── ReduxTesting     TestStore（Redux + ReduxSaga + SagaTesting）
+├── ReduxPersistence State の永続化（Redux + Foundation）
 ├── ReduxMacros      マクロ（@ActionCases / @Slice）。実装の ReduxMacrosPlugin だけが swift-syntax に依存
 └── InternalPrimitives  内部で共有する部品（`Locked` など）。プロダクトにせず `package` アクセスで使う
 ```
@@ -523,6 +524,47 @@ ctx.debounce(.milliseconds(300), .binding(\.$query)) { ctx, query in ... }
 
 - マクロではなくプロパティラッパーにしたのは、書き換えてよいプロパティを型で区別でき、マクロなしでも使えるため。`var binding` は `@ActionCases`（`@Slice` の Action には自動で付く）が生成し、マクロを使わない場合は手書きする。
 - 書き換えてよいプロパティを印で限定するのは、View から任意の State を書き換えられると、reducer を通さない変更が増えて追いにくくなるため。
+
+### 5.11 State の永続化（`ReduxPersistence`）
+
+State のうち保存したい部分（`Codable` なスナップショット）を保存し、起動時に復元します。Foundation（JSON・ファイル・UserDefaults）を使うため、`Redux` 本体とは別のターゲットにします。
+
+```swift
+public protocol PersistenceStorage: Sendable {
+  func load(key: String) throws -> Data?
+  func save(_ data: Data, key: String) throws
+  func remove(key: String) throws
+}
+// 用意する保存先: UserDefaultsStorage / FileStorage / InMemoryStorage
+
+public struct Persistence<State: Sendable, Snapshot: Codable & Sendable>: Sendable {
+  public init(key:storage:version:snapshot:apply:migrate:)
+  public init(key:storage:version:keyPath:migrate:)            // State のプロパティを保存
+  public func restore(into state: State, onError:) -> State    // 復元（失敗したら state のまま）
+  public func save(_ state: State) throws
+  public func clear() throws
+}
+
+@MainActor
+public final class PersistenceMiddleware<State, Action>: Middleware {
+  public init(_ persistence: Persistence<State, Snapshot>, debounce: Duration = .milliseconds(500),
+              clock: any Clock<Duration> = ContinuousClock(), onError:)
+  public func flush() async   // 待っている保存をすぐ行う（バックグラウンドに入るときなど）
+}
+```
+
+```swift
+let persistence = Persistence<AppState, Settings>(key: "settings", storage: UserDefaultsStorage(), keyPath: \.settings)
+let store = Store(
+  initialState: persistence.restore(into: AppState()),
+  reducer: appReducer,
+  middleware: [PersistenceMiddleware<AppState, AppAction>(persistence)])
+```
+
+- 保存形式は `{"version": n, "snapshot": ...}` の JSON。バージョンが違えば `migrate` に古いスナップショットの JSON を渡す（変換できなければ復元しない）。
+- 保存は、スナップショットが変わったとき（`Equatable` なら比較する）に、最後の変化から `debounce` 後に 1 回だけ行う。エンコードと書き込みは `Task.detached` でメインアクターの外で行う。
+- Saga ではなくミドルウェアにするのは、Saga を使わないアプリでも使えるようにするため。
+- 保存するのは、設定や下書きなど保存してよいものに絞る。読み込み中やエラーのような一時的な状態は保存しない。
 
 ---
 
