@@ -72,6 +72,11 @@ final class ActionMulticaster<Action: Sendable>: Sendable {
     }
   }
 
+  /// 購読者の数（テスト用）。
+  var subscriberCount: Int {
+    storage.withLock { $0.subscribers.count }
+  }
+
   /// 待っている take の数（テスト用）。
   var takerCount: Int {
     storage.withLock { $0.takers.count }

@@ -39,7 +39,7 @@
 | # | ブランチ | 内容 |
 | --- | --- | --- |
 | 3-1 | `feature/saga-delay` | `delay`（Clock 注入）+ テスト → 2-7 に統合 |
-| 3-2 | `feature/saga-take-helpers` | `takeEvery` / `takeLatest` / `takeLeading` + テスト |
+| 3-2 | `feature/saga-take-helpers` | `takeEvery` / `takeLatest` / `takeLeading` + テスト （[#17](https://github.com/mitsuharu/swift-redux-saga/pull/17)） |
 | 3-3 | `feature/saga-debounce-throttle` | `debounce` / `throttle` + テスト |
 | 3-4 | `feature/saga-all-race` | `all` / `race`（敗者のキャンセル）+ テスト |
 

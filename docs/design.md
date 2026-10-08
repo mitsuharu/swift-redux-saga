@@ -638,9 +638,9 @@ extension ActionPattern where Value == Action, Action: Equatable {
 | `join` | `ctx.join(_ task: SagaTask) async throws` | Saga の外からは `SagaTask.join()` |
 | `cancelled` | `ctx.isCancelled` / `Task.isCancelled` | |
 | `delay` | `func delay(_ duration: Duration) async throws` | ランタイムに注入した `Clock` を使う |
-| `takeEvery` | `func takeEvery<V>(_ p, _ worker) -> SagaTask` | 非ブロッキング（内部で fork） |
-| `takeLatest` | `func takeLatest<V>(_ p, _ worker) -> SagaTask` | 前回のワーカーをキャンセル |
-| `takeLeading` | `func takeLeading<V>(_ p, _ worker) -> SagaTask` | 実行中は新しい Action を無視 |
+| `takeEvery` | `func takeEvery<V>(_ p, _ worker: (SagaContext, V) async throws -> Void) -> SagaTask` | 非ブロッキング（内部で fork）。ワーカーは並行に動く |
+| `takeLatest` | `func takeLatest<V>(_ p, _ worker) -> SagaTask` | 前回のワーカーをキャンセルしてから起動 |
+| `takeLeading` | `func takeLeading<V>(_ p, _ worker) -> SagaTask` | 実行中に届いた Action は捨てる |
 | `debounce` | `func debounce<V>(_ d: Duration, _ p, _ worker) -> SagaTask` | |
 | `throttle` | `func throttle<V>(_ d: Duration, _ p, _ worker) -> SagaTask` | |
 | `all` | `func all<each R>(_ ops: repeat @Sendable () async throws -> each R) async throws -> (repeat each R)` | 1 つでも失敗したら他をキャンセル |
@@ -666,7 +666,8 @@ extension ActionPattern where Value == Action, Action: Equatable {
 - ランタイムは `ActionMulticaster` を持ち、`emit` された Action を、その時点で登録されている taker（`take` 待ち）とチャネルに配る。
 - `take` は 1 回限りの taker を登録して待つ。キャンセルされたら登録を外して `CancellationError` を投げる。購読が溜まることはない。
 - `take` を繰り返すループでは、ワーカーの実行中に来た Action は受け取れない（redux-saga と同じ）。取りこぼしたくない場合は `actionChannel` か `takeEvery` を使う。
-- `takeEvery` などのヘルパーは内部で永続的な購読（バッファ付き）を使い、取りこぼさない。
+- `takeEvery` などのヘルパーは、呼び出した時点で購読（内部のチャネル）を始め、取りこぼさない。チャネルはヘルパーの終了時に閉じ、購読を外す。
+- 内部のチャネルに `AsyncStream` を使わないのは、受け取り側の再開を Activity で数える必要があるため（値を渡す側が数える）。
 
 ### 6.8 時間
 
