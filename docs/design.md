@@ -310,7 +310,7 @@ Saga を載せるミドルウェアはこの仕組みの上に `ReduxSaga` タ�
 Swift では enum の case が「Action 作成関数」の役割を果たすため、Slice は State・Action・reducer を 1 つの名前空間にまとめるプロトコルとして定義します。
 
 ```swift
-public protocol Slice {
+public protocol Slice: SendableMetatype {
   associatedtype State: Sendable
   associatedtype Action: Sendable
   static var initialState: State { get }
@@ -319,6 +319,15 @@ public protocol Slice {
 
 extension Slice {
   public static var reducer: Reducer<State, Action> { get }
+}
+
+extension Reducer {
+  /// Slice の reducer を親に持ち上げる（scope の Slice 版）。
+  public static func slice<S: Slice>(
+    _ slice: S.Type,
+    state: WritableKeyPath<State, S.State> & Sendable,
+    action: @escaping @Sendable (Action) -> S.Action?
+  ) -> Reducer
 }
 ```
 
@@ -336,6 +345,8 @@ enum Counter: Slice {
   }
 }
 ```
+
+- `SendableMetatype` を要求するのは、reducer（`@Sendable`）の中から Slice の `static func` を呼ぶため。default MainActor isolation のモジュールでは `nonisolated enum Counter: Slice` と宣言する。
 
 ### 5.7 Selector（`createSelector` 相当）
 

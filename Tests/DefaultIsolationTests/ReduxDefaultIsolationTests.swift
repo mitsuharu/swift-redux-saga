@@ -76,3 +76,28 @@ final class RecordingMiddleware: Middleware {
     #expect(await iterator.next() == 1)
   }
 }
+
+// default isolation のモジュールでは、Slice は nonisolated で宣言する。
+nonisolated enum Toggle: Slice {
+  struct State: Sendable, Equatable {
+    var isOn = false
+  }
+
+  enum Action: Sendable {
+    case toggle
+  }
+
+  static let initialState = State()
+
+  static func reduce(into state: inout State, action: Action) {
+    state.isOn.toggle()
+  }
+}
+
+@Suite struct SliceDefaultIsolationTests {
+  @Test func nonisolatedSliceWorksInADefaultMainActorModule() {
+    let store = Store(initialState: Toggle.initialState, reducer: Toggle.reducer)
+    store.dispatch(.toggle)
+    #expect(store.isOn)
+  }
+}
