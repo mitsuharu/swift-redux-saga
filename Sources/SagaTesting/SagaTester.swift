@@ -25,7 +25,7 @@ import Saga
 /// テストではすぐ終わる差し替え（スタブ）を渡してください。
 public final class SagaTester<State: Sendable, Action: Sendable>: Sendable {
   private let host: Host
-  private let runtime: SagaRuntime<State, Action>
+  let runtime: SagaRuntime<State, Action>
   private let task: SagaTask
   /// テストで使う時計。
   public let clock: TestClock
