@@ -33,7 +33,10 @@ package final class Activity: Sendable {
   package func end() {
     let waiters = storage.withLock { storage -> [CheckedContinuation<Void, Never>] in
       storage.running -= 1
-      precondition(storage.running >= 0, "Activity.end() was called more than begin().")
+      // 数え方の不整合はテストの待ち合わせにしか影響しないため、リリースビルドではアプリを止めずに 0 に戻す。
+      // デバッグビルドでは不具合として検出する。
+      assert(storage.running >= 0, "Activity.end() was called more than begin().")
+      storage.running = max(storage.running, 0)
       guard storage.running == 0 else { return [] }
       defer { storage.idleWaiters = [:] }
       return Array(storage.idleWaiters.values)
