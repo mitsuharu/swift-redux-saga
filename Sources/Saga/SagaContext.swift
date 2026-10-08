@@ -5,6 +5,16 @@
 public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
   let runtime: SagaRuntime<State, Action>
   let forks: ForkQueue<SagaRuntime<State, Action>.ForkRequest>
+  let sagaID: SagaID
+
+  /// この Saga の識別子。
+  public var id: SagaID {
+    sagaID
+  }
+
+  private func trigger(_ effect: SagaEffect) {
+    runtime.monitor?.effectTriggered(sagaID, effect: effect)
+  }
 
   /// 現在のタスクがキャンセルされているかどうか（redux-saga の `cancelled()` 相当）。
   public var isCancelled: Bool {
@@ -19,7 +29,8 @@ public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
   ///
   /// - Throws: 待っている間にキャンセルされた場合は `CancellationError`。
   public func take<Value>(_ pattern: ActionPattern<Action, Value>) async throws -> Value {
-    try await runtime.multicaster.take(pattern)
+    trigger(.take)
+    return try await runtime.multicaster.take(pattern)
   }
 
   /// 次に届く Action を待ちます。
@@ -31,6 +42,7 @@ public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
 
   /// Action を発行します。Host が Action を処理し終えてから戻ります。
   public func put(_ action: Action) async {
+    trigger(.put(String(describing: action)))
     await runtime.host.dispatch(action)
   }
 
@@ -38,12 +50,13 @@ public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
 
   /// 現在の State を返します。
   public func select() async -> State {
-    await runtime.host.state()
+    trigger(.select)
+    return await runtime.host.state()
   }
 
   /// 現在の State から値を取り出します。
   public func select<Value>(_ selector: (State) -> Value) async -> Value {
-    selector(await runtime.host.state())
+    selector(await select())
   }
 
   // MARK: - fork / spawn / cancel
@@ -58,14 +71,16 @@ public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
   /// 子を ``SagaTask/cancel()`` でキャンセルしても、呼び出し元にエラーは伝わりません。
   @discardableResult
   public func fork(_ saga: Saga<State, Action>) -> SagaTask {
-    let state = SagaTaskState(activity: runtime.activity)
+    let state = runtime.makeTaskState()
+    trigger(.fork(state.id))
+    runtime.monitor?.sagaStarted(state.id, name: saga.name, parent: sagaID)
     runtime.activity.begin()
     let accepted = forks.push(
       SagaRuntime.ForkRequest { [runtime] in try await runtime.runForked(saga, state: state) })
     if !accepted {
       // 呼び出し元の本体が終わった後に fork された（コンテキストを外に持ち出した）場合。
       runtime.activity.end()
-      state.finish(.cancelled)
+      runtime.finish(state, .cancelled)
     }
     return SagaTask(state: state)
   }
@@ -85,7 +100,9 @@ public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
   /// ランタイムの停止（``SagaRuntime/stop()``）ではキャンセルされます。
   @discardableResult
   public func spawn(_ saga: Saga<State, Action>) -> SagaTask {
-    runtime.run(saga)
+    let task = runtime.run(saga)
+    trigger(.spawn(task.id))
+    return task
   }
 
   /// 関数を Saga として切り離して起動します。`spawn(_:)` と同じです。
@@ -99,6 +116,7 @@ public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
 
   /// Saga をキャンセルします。``SagaTask/cancel()`` と同じです。
   public func cancel(_ task: SagaTask) {
+    trigger(.cancel(task.id))
     task.cancel()
   }
 
@@ -109,6 +127,7 @@ public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
   /// - Throws: 待っている Saga が失敗した場合はそのエラー、キャンセルされた場合は `CancellationError`。
   ///   待っている側がキャンセルされた場合も `CancellationError` を投げます（待たれている Saga は止まりません）。
   public func join(_ task: SagaTask) async throws {
+    trigger(.join(task.id))
     try await task.state.join(fromSaga: true)
   }
 
@@ -127,6 +146,7 @@ public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
     _ function: (repeat each Argument) async throws -> Result,
     _ arguments: repeat each Argument
   ) async throws -> Result {
+    trigger(.call)
     try Task.checkCancellation()
     return try await function(repeat each arguments)
   }
