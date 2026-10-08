@@ -11,16 +11,19 @@ let package = Package(
     .watchOS(.v10),
     .visionOS(.v1),
   ],
+  // プロダクトは用途ごとに、それだけで import できるよう依存するターゲットも含める
+  // （例: ReduxSaga だけを追加すれば Redux と Saga も使える）。
   products: [
     .library(name: "Redux", targets: ["Redux"]),
     .library(name: "Saga", targets: ["Saga"]),
-    .library(name: "ReduxSaga", targets: ["ReduxSaga"]),
-    .library(name: "ReduxSwiftUI", targets: ["ReduxSwiftUI"]),
-    .library(name: "ReduxUIKit", targets: ["ReduxUIKit"]),
-    .library(name: "SagaTesting", targets: ["SagaTesting"]),
-    .library(name: "ReduxTesting", targets: ["ReduxTesting"]),
-    .library(name: "ReduxMacros", targets: ["ReduxMacros"]),
-    .library(name: "ReduxPersistence", targets: ["ReduxPersistence"]),
+    .library(name: "ReduxSaga", targets: ["Redux", "Saga", "ReduxSaga"]),
+    .library(name: "ReduxSwiftUI", targets: ["Redux", "ReduxSwiftUI"]),
+    .library(name: "ReduxUIKit", targets: ["Redux", "ReduxUIKit"]),
+    .library(name: "ReduxMacros", targets: ["Redux", "ReduxMacros"]),
+    .library(name: "ReduxPersistence", targets: ["Redux", "ReduxPersistence"]),
+    .library(name: "SagaTesting", targets: ["Saga", "SagaTesting"]),
+    .library(
+      name: "ReduxTesting", targets: ["Redux", "Saga", "ReduxSaga", "SagaTesting", "ReduxTesting"]),
   ],
   dependencies: [
     // マクロ（ReduxMacros）の実装にだけ使う。範囲を広く取るのは、利用者の Xcode / ツールチェーンに
