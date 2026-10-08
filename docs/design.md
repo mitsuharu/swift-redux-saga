@@ -568,20 +568,26 @@ enum CounterSagas {
 public struct ActionPattern<Action: Sendable, Value: Sendable>: Sendable {
   public init(_ extract: @escaping @Sendable (Action) -> Value?)
 
-  /// enum の case などから値を型付きで取り出す。
+  /// enum の case などから値を型付きで取り出す（init と同じ）。
   public static func `case`(_ extract: @escaping @Sendable (Action) -> Value?) -> Self
+  /// 型による判定（`Action` がプロトコル存在型のとき用）。`as?` でキャストする。
+  public static func type(_ type: Value.Type) -> Self
+  /// いずれかに一致する（先に書いたものを優先）。
+  public static func oneOf(_ patterns: Self...) -> Self
+
+  public func match(_ action: Action) -> Value?
+  /// 取り出した値が条件を満たすときだけ一致する。
+  public func `where`(_ predicate: @escaping @Sendable (Value) -> Bool) -> Self
 }
 
 extension ActionPattern where Value == Action {
-  /// すべての Action。
   public static var any: Self { get }
-  /// 条件に合う Action。
   public static func filter(_ predicate: @escaping @Sendable (Action) -> Bool) -> Self
 }
 
-extension ActionPattern {
-  /// 型による判定（`Action` がプロトコル存在型のとき用）。`as?` でキャストする。
-  public static func type(_ type: Value.Type) -> Self
+extension ActionPattern where Value == Action, Action: Equatable {
+  /// 等しい Action に一致する（`.action(.logout)`）。
+  public static func action(_ expected: Action) -> Self
 }
 ```
 
