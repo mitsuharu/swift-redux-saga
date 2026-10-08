@@ -178,8 +178,10 @@ final class SagaTaskState: Sendable {
   }
 
   /// 終わり方を確定し、join で待っている側を再開する。2 回目以降は無視して `false` を返す。
+  ///
+  /// `didFinish` は、終わり方を確定した直後、待っている側を再開する前に呼ぶ（モニタへの通知用）。
   @discardableResult
-  func finish(_ status: SagaResult) -> Bool {
+  func finish(_ status: SagaResult, didFinish: () -> Void = {}) -> Bool {
     let waiting = storage.withLock { storage -> ([Joiner], [@Sendable () -> Void])? in
       guard storage.status == nil else { return nil }
       storage.status = status
@@ -191,6 +193,7 @@ final class SagaTaskState: Sendable {
       return (Array(storage.joiners.values), Array(storage.observers.values))
     }
     guard let (joiners, observers) = waiting else { return false }
+    didFinish()
     for joiner in joiners {
       if joiner.fromSaga { activity.begin() }
       Self.resume(joiner.continuation, with: status)

@@ -133,7 +133,8 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
   }
 
   func finish(_ state: SagaTaskState, _ result: SagaResult) {
-    if state.finish(result) {
+    // join で待っている側より先にモニタに通知する。join から戻った時点で通知が終わっているようにするため。
+    state.finish(result) {
       monitor?.sagaFinished(state.id, result: result)
     }
   }
@@ -149,8 +150,10 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
         finish(state, .cancelled)
       } else {
         let error = error as? SagaError ?? SagaError.propagating(error, through: saga.name)
-        finish(state, .failed(error.underlying))
+        // 終わり方を確定する前に報告する。確定すると Activity の後始末の分が手放され、
+        // settle() が報告より先に戻ってしまうため。
         onError(error)
+        finish(state, .failed(error.underlying))
       }
     }
   }
