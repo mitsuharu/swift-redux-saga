@@ -742,32 +742,35 @@ Swift にはジェネレーターがないため、redux-saga の「Effect を 1
 
 ```swift
 @Test func fetchUser() async throws {
-  let clock = TestClock()
   let tester = SagaTester(
     initialState: AppState(),
-    reducer: appReducer,
-    saga: UserSagas(fetchUserUseCase: StubFetchUserUseCase(User(id: 1))).root,
-    clock: clock
+    reduce: appReducer.reduce,
+    saga: UserSagas(fetchUserUseCase: StubFetchUserUseCase(User(id: 1))).root
   )
 
   await tester.send(.user(.fetch(1)))
-  try await tester.receive(.user(.fetched(User(id: 1))))   // Action が Equatable の場合
+  try tester.receive(.user(.fetched(User(id: 1))))   // Action が Equatable の場合
   #expect(tester.state.user == User(id: 1))
-  try await tester.finish()   // 残っている Saga がないこと、未確認の Action がないこと
+  try await tester.finish()   // 確かめていない Action や未処理のエラーがないこと
 }
 ```
 
 | 型 | ターゲット | 役割 |
 | --- | --- | --- |
-| `TestClock` | `SagaTesting` | 手動で進める `Clock`。`advance(by:)` / `run()` |
-| `SagaTester` | `SagaTesting` | Store なしで Saga を動かす。発行された Action を記録し、State を reducer で更新する |
+| `TestClock` | `SagaTesting` | 手動で進める `Clock`。`advance(by:)` / `advance(to:)` |
+| `SagaTester` | `SagaTesting` | Store なしで Saga を動かす。`send` / `receive` / `advance(by:)` / `settle` / `finish` |
+| `SagaTesterFailure` | `SagaTesting` | 検証の失敗。テスト支援は Swift Testing を import せず、失敗を `throws` で返す |
 | `TestStore` | `ReduxTesting` | 本物の `Store` + ミドルウェアを使い、Action と State の変化を記録・検証する |
 
 ### フレーキーにしないための仕組み
 
-時間や `Task.yield()` の回数に頼らないため、ランタイムは「すべての Saga が Effect（`take` / `delay` / チャネル待ち）で止まっているか」を数えます。テスト支援の `settle()` はこの状態になるまで待ちます。`receive` / `advance(by:)` は内部で `settle()` を呼びます。
+時間や `Task.yield()` の回数に頼らないため、ランタイムは「Effect で止まっていない Saga の数」（`Activity`）を数えます。`settle()` はこの数が 0 になるまで待ちます。`send` / `advance(by:)` は内部で `settle()` を呼びます。
 
----
+- Saga の本体が動いている間と、本体が終わってから終わり方が確定する（finish）までの後始末を数える。
+- `take` / `delay`（`TestClock` のとき）/ `join` で止まる直前に減らし、**再開させる側**が resume の直前に増やす。再開される側で増やすと、resume から動き出すまでの間に 0 と誤判定するため。
+- キャンセルの要求、子の失敗、最後の子の終了は、対象の Saga の後始末の分を先に数えてから自分の分を減らす。キャンセルや失敗の伝播の途中で 0 にならないようにするため。
+- `call` で呼んだ関数の実行中は数える。終わらない関数（実際の通信など）を呼ぶと `settle()` も終わらないので、テストではスタブを渡す。
+- `TestClock` 以外の時計で `delay` している間は数える（`settle()` は実際の時間だけ待つ）。
 
 ## 10. SwiftUI / UIKit 連携
 

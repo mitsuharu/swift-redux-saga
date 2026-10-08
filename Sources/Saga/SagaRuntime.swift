@@ -129,7 +129,7 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
 
   private func runRoot(_ saga: Saga<State, Action>, state: SagaTaskState) async {
     do {
-      try await runScoped(saga, id: state.id)
+      try await runScoped(saga, state: state)
       // キャンセルを受けた Saga が CancellationError を catch して正常に終わっても、キャンセルとして扱う
       // （redux-saga と同じ）。join する側が、止めたはずの Saga を完了と誤解しないため。
       finish(state, state.isCancelRequested ? .cancelled : .completed)
@@ -148,18 +148,18 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
   ///
   /// 本体と子はすべて 1 つのタスクグループの子タスクになるため、親のキャンセルは子に伝わり、
   /// 子の失敗は兄弟と本体をキャンセルして親に伝わる。本体が終わっても、子がすべて終わるまで戻らない。
-  /// 呼び出し側で `activity.begin()` 済みであること（本体の終了時に `end()` する）。
+  /// 呼び出し側で本体の分の `activity.begin()` 済みであること。
   ///
   /// 本体か子が失敗したら、この Saga を経路に加えた ``SagaError`` を投げる。
-  func runScoped(_ saga: Saga<State, Action>, id: SagaID) async throws {
+  func runScoped(_ saga: Saga<State, Action>, state: SagaTaskState) async throws {
     let forks = ForkQueue<ForkRequest>()
-    let context = SagaContext(runtime: self, forks: forks, sagaID: id)
+    let context = SagaContext(runtime: self, forks: forks, task: state)
     do {
       try await withThrowingDiscardingTaskGroup { group in
         group.addTask {
           defer {
             forks.close()
-            self.activity.end()
+            state.bodyDidFinish()
           }
           try await saga.run(context)
         }
@@ -178,13 +178,15 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
   ///
   /// 子が失敗したらエラーを投げ、親のタスクグループを失敗させる（兄弟と親がキャンセルされる）。
   /// 子がキャンセルされた場合（個別のキャンセル、親からのキャンセル）はエラーを投げない。
-  func runForked(_ saga: Saga<State, Action>, state: SagaTaskState) async throws {
+  func runForked(
+    _ saga: Saga<State, Action>, state: SagaTaskState, parent: SagaTaskState
+  ) async throws {
     let signal = CancelSignal()
     state.onCancel { signal.fire() }
     do {
       try await withThrowingTaskGroup(of: Bool.self) { group in
         group.addTask {
-          try await self.runScoped(saga, id: state.id)
+          try await self.runScoped(saga, state: state)
           return true
         }
         group.addTask {
@@ -199,11 +201,14 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
           _ = try await group.next()
         }
       }
+      parent.childDidFinish(failed: false)
       finish(state, state.isCancelRequested || Task.isCancelled ? .cancelled : .completed)
     } catch {
       if error is CancellationError || state.isCancelRequested || Task.isCancelled {
+        parent.childDidFinish(failed: false)
         finish(state, .cancelled)
       } else {
+        parent.childDidFinish(failed: true)
         finish(state, .failed((error as? SagaError)?.underlying ?? error))
         throw error
       }
