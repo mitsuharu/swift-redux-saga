@@ -55,7 +55,7 @@
 | --- | --- | --- |
 | 5-1 | `feature/slice` | `Slice` プロトコル + テスト （[#22](https://github.com/mitsuharu/swift-redux-saga/pull/22)） |
 | 5-2 | `feature/store-builder` | `configureStore` 相当の result builder 初期化子 + テスト （[#23](https://github.com/mitsuharu/swift-redux-saga/pull/23)） |
-| 5-3 | `feature/selector` | `createSelector`（メモ化）+ テスト |
+| 5-3 | `feature/selector` | `createSelector`（メモ化）+ テスト （[#24](https://github.com/mitsuharu/swift-redux-saga/pull/24)） |
 | 5-4 | `feature/entity-adapter` | `EntityState` / `EntityAdapter` + テスト |
 | 5-5 | `feature/test-store` | `ReduxTesting`: `TestStore` + テスト |
 
