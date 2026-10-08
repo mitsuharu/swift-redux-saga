@@ -245,7 +245,11 @@ let store = Store(initialState: AppState()) {
 
 （`action: \.counter` のような書き方は enum の case キーパスがない Swift では使えないため、マクロなしでは `action: { if case .counter(let a) = $0 { a } else { nil } }` と書きます。マクロ版で短くします。）
 
-dispatch 中の再入（reducer やミドルウェアの中から `dispatch`）は Redux と同じく禁止し、デバッグビルドでは `assertionFailure` で検出します。ミドルウェアが `next` の外で追加の Action を流したい場合は、`dispatch` を後で呼ぶ（`Task { @MainActor in ... }`）か、Saga を使います。
+dispatch の処理中に `dispatch` が呼ばれた場合（ミドルウェアや Observation の通知の中から呼ばれた場合）は、その場では処理せずキューに積み、処理中の Action が終わった後に呼ばれた順に処理します。
+
+- 再入をその場で処理しないのは、通知の途中で State が書き換わり、先に呼ばれた Action より後の Action の結果が先に見えてしまうため。
+- 再入を禁止（`assertionFailure`）しないのは、SwiftUI / UIKit の Observation の通知からの dispatch は利用側で避けにくく、禁止すると実用上困るため。
+- reducer は Store を参照できない `@Sendable` の純粋関数なので、reducer の中からの dispatch は型の上で起こらない。
 
 ### 5.4 Observation の追跡単位（プロパティ単位の再描画）
 
