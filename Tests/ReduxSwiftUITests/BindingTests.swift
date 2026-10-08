@@ -56,3 +56,40 @@
     }
   }
 #endif
+
+#if canImport(SwiftUI)
+  import ReduxSwiftUI
+
+  private struct SettingsState: Sendable, Equatable {
+    @BindableState var name = ""
+    var other = 0
+  }
+
+  private enum SettingsAction: Sendable, BindableAction {
+    case binding(BindingAction<SettingsState>)
+    case touch
+
+    var binding: BindingAction<SettingsState>? {
+      if case .binding(let action) = self { action } else { nil }
+    }
+  }
+
+  @MainActor
+  @Suite struct BindableStateBindingTests {
+    @Test func bindingToABindableStateDispatchesABindingAction() {
+      let store = Store(
+        initialState: SettingsState(),
+        reducer: Reducer<SettingsState, SettingsAction> {
+          Reducer.binding
+          Reducer { state, action in
+            if case .touch = action { state.other += 1 }
+          }
+        }
+      )
+      let name = store.binding(\.$name)
+      name.wrappedValue = "redux"
+      #expect(store.name == "redux")
+      #expect(name.wrappedValue == "redux")
+    }
+  }
+#endif
