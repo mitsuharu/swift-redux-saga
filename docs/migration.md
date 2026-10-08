@@ -22,7 +22,7 @@
 | `skipRepeats` / `automaticallySkipsRepeats` | 不要（`Equatable` なプロパティは値が変わったときだけ通知される） |
 | `Middleware<AppState>`（`dispatch` / `getState` / `next` のクロージャ） | `Middleware` プロトコルの `handle(_:store:next:)` |
 | ReSwift-Thunk などの非同期処理 | Saga（`ReduxSaga` の `SagaMiddleware`） |
-| どのスレッドからでも `dispatch` | `dispatch` はメインアクター上で呼ぶ。メインアクター外からは `await MainActor.run { ... }` か Saga の `put` |
+| どのスレッドからでも `dispatch` | `dispatch` は `@MainActor`。メインアクター外からは `await store.dispatch(...)` と書く（コンパイラがメインアクターでの実行を保証する） |
 
 ### 手順
 
@@ -89,7 +89,7 @@ let appReducer = Reducer<AppState, AppAction> {
 // Before
 let store = Store<AppState>(reducer: appReducer, state: nil, middleware: [loggingMiddleware])
 
-// After（Store はメインアクター上で作り、メインアクター上で dispatch する）
+// After（Store は @MainActor。メインアクター外からは await store.dispatch(...) で呼ぶ）
 let store = Store(initialState: AppState(), reducer: appReducer, middleware: [LoggingMiddleware()])
 ```
 
@@ -164,7 +164,7 @@ struct LoggingMiddleware: Middleware {
 let fetchCounter = Thunk<AppState> { dispatch, getState in
   Task {
     let value = try await api.fetchCounter()
-    await MainActor.run { dispatch(SetCounter(value: value)) }
+    dispatch(SetCounter(value: value))   // ReSwift はスレッドを保証しない
   }
 }
 
