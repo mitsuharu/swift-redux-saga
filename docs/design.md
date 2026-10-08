@@ -681,11 +681,18 @@ extension ActionPattern where Value == Action, Action: Equatable {
 ```swift
 @MainActor
 public final class SagaMiddleware<State: Sendable, Action: Sendable>: Middleware {
-  public init(clock: any Clock<Duration> = ContinuousClock(), monitor: (any SagaMonitor)? = nil, onError: ...)
+  public init(
+    clock: any Clock<Duration> = ContinuousClock(),
+    monitor: (any SagaMonitor)? = nil,
+    onError: @escaping @Sendable (SagaError) -> Void = SagaRuntime<State, Action>.logError
+  )
 
   /// ルート Saga を起動する。Store の生成後に呼ぶ。
   @discardableResult
   public func run(_ saga: Saga<State, Action>) -> SagaTask
+
+  /// すべての Saga が Effect で止まるまで待つ。
+  public func waitUntilIdle() async
 
   /// すべての Saga をキャンセルする。
   public func stop()
@@ -693,10 +700,16 @@ public final class SagaMiddleware<State: Sendable, Action: Sendable>: Middleware
 ```
 
 - `handle` では `next(action)`（reducer 適用）の後に `runtime.emit(action)` を呼ぶ。redux-saga と同じく、Saga が受け取るのは reducer 適用後の Action。
-- Host（Store 側の窓口）は Store を弱参照する。Store が解放されたらランタイムを停止する。これにより Store ⇄ ミドルウェア ⇄ ランタイムの循環参照を作らない。
-- `put` は `await MainActor.run { store.dispatch(action) }` 相当。
+- Host（Store 側の窓口）は `MiddlewareAPI` 経由で Store を弱参照する。Store が解放されるとミドルウェアも解放され、`deinit` でランタイムを停止する。Store ⇄ ミドルウェア ⇄ ランタイムの循環参照は作らない。Store の解放後に `select` された場合は、最後の State を返す。
+- `put` は `await MainActor.run { store.dispatch(action) }` 相当。Store の dispatch は同期なので、戻った時点で reducer の適用が終わっている。
 
----
+### 起動直後の Action（redux-saga との違い）
+
+redux-saga の `run` は、ルート Saga を最初の `take` まで同期に進めてから戻ります。Swift では async 関数を同期に進められないため、`run` から Saga は非同期に動き出し、**起動直後に dispatch した Action は、まだ `take` で待ち始めていない Saga に届きません**。
+
+- 起動時の処理（初期データの読み込みなど）は、外から Action を dispatch せず、ルート Saga の中に書く（推奨）。
+- 外から dispatch する必要がある場合は、先に `await sagaMiddleware.waitUntilIdle()` で待つ。
+- 起動前の Action をバッファして後から配る方式は採らない。どの Saga が「起動中」かを決められず、長い `call` を先に行う Saga があると、すべての Action が遅れるため。
 
 ## 8. エラー処理
 

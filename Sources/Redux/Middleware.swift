@@ -39,7 +39,7 @@ extension Middleware {
 ///
 /// Store を弱参照で持ちます。ミドルウェアが窓口を保持しても、Store との循環参照になりません。
 @MainActor
-public struct MiddlewareAPI<State: Sendable, Action: Sendable> {
+public struct MiddlewareAPI<State: Sendable, Action: Sendable>: Sendable {
   private weak var store: Store<State, Action>?
 
   init(store: Store<State, Action>) {

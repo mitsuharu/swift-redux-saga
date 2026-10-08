@@ -24,7 +24,7 @@ let package = Package(
     .target(name: "InternalPrimitives"),
     .target(name: "Redux", dependencies: ["InternalPrimitives"]),
     .target(name: "Saga", dependencies: ["InternalPrimitives"]),
-    .target(name: "ReduxSaga", dependencies: ["Redux", "Saga"]),
+    .target(name: "ReduxSaga", dependencies: ["Redux", "Saga", "InternalPrimitives"]),
     .target(name: "ReduxSwiftUI", dependencies: ["Redux"]),
     .target(name: "ReduxUIKit", dependencies: ["Redux"]),
     .target(name: "SagaTesting", dependencies: ["Saga", "InternalPrimitives"]),
@@ -40,7 +40,7 @@ let package = Package(
     // アプリが default MainActor isolation を有効にしていても使えることを確かめるテスト。
     .testTarget(
       name: "DefaultIsolationTests",
-      dependencies: ["Redux"],
+      dependencies: ["Redux", "ReduxSaga", "SagaTesting"],
       swiftSettings: [.defaultIsolation(MainActor.self)]
     ),
   ],
