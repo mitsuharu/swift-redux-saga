@@ -8,6 +8,16 @@
 public protocol TrackedState {
   /// 読み取りを知らせる先。マクロが生成します。直接使わないでください。
   var _$tracking: StateTrackingContext { get set }
+
+  /// 追跡の仕組みを入れられないプロパティ（`let` やプロパティラッパー付きなど）を持つか。マクロが生成します。
+  ///
+  /// `true` なら、この型の値は全体の変化で通知します。
+  static var _$hasUntrackedProperties: Bool { get }
+}
+
+extension TrackedState {
+  // 手で準拠させた型では、どのプロパティが追跡されるか分からないため、全体の変化で通知する（安全側）。
+  public static var _$hasUntrackedProperties: Bool { true }
 }
 
 /// ``TrackedState`` の値が、Store のどこから読まれたかを持つ。
@@ -43,6 +53,10 @@ public struct StateTrackingContext: Sendable, Hashable {
   ) -> Value {
     guard let path = context.base?.appending(keyPath) else { return value }
     if var tracked = value as? any TrackedState {
+      if type(of: tracked)._$hasUntrackedProperties {
+        // 追跡できないプロパティがあるので、値全体の変化でも通知されるようにする。
+        context.access(path)
+      }
       tracked._$tracking = StateTrackingContext(base: path, access: context.access)
       // `as?` で取り出した値は Value なので、元の型に戻せる。
       return tracked as? Value ?? value

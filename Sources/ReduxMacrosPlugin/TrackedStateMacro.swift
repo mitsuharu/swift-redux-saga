@@ -22,7 +22,16 @@ extension TrackedStateMacro: MemberMacro {
       return []
     }
     let access = ActionCasesMacro.accessModifier(of: declaration)
-    return ["\(raw: access)var _$tracking = Redux.StateTrackingContext()"]
+    // 追跡の仕組みを入れられない保存プロパティ（let やプロパティラッパー付きなど）があれば、
+    // その型の値は全体の変化で通知する必要がある。
+    let hasUntracked = declaration.memberBlock.members.contains {
+      guard let variable = $0.decl.as(VariableDeclSyntax.self) else { return false }
+      return variable.isInstanceStoredProperty && !variable.isTrackableStoredProperty
+    }
+    return [
+      "\(raw: access)var _$tracking = Redux.StateTrackingContext()",
+      "\(raw: access)static var _$hasUntrackedProperties: Bool { \(raw: hasUntracked) }",
+    ]
   }
 }
 
@@ -108,14 +117,32 @@ extension TrackedPropertyMacro: PeerMacro {
 }
 
 extension VariableDeclSyntax {
-  /// 追跡の対象にする保存プロパティか（`var` で、アクセサがなく、static / lazy でない、1 つの名前）。
+  /// 追跡の対象にする保存プロパティか（型を書いた `var` で、アクセサやプロパティラッパーがなく、
+  /// static / lazy でない、1 つの名前）。
   var isTrackableStoredProperty: Bool {
-    guard bindingSpecifier.tokenKind == .keyword(.var), bindings.count == 1,
-      let binding = bindings.first, binding.accessorBlock == nil,
-      let name = singleIdentifier, !name.hasPrefix("_")
+    guard isInstanceStoredProperty, bindingSpecifier.tokenKind == .keyword(.var),
+      bindings.count == 1, let name = singleIdentifier, !name.hasPrefix("_")
     else { return false }
-    let excluded: Set<String> = ["static", "class", "lazy"]
-    return !modifiers.contains { excluded.contains($0.name.text) }
+    // プロパティラッパーはアクセサと併用できないため対象外にする（@TrackedProperty 自身は除く）。
+    let otherAttributes = attributes.filter {
+      $0.as(AttributeSyntax.self)?.attributeName.trimmedDescription != "TrackedProperty"
+    }
+    return otherAttributes.isEmpty && !modifiers.contains { $0.name.text == "lazy" }
+  }
+
+  /// インスタンスの保存プロパティか（計算プロパティと static / class を除く）。
+  var isInstanceStoredProperty: Bool {
+    guard !modifiers.contains(where: { ["static", "class"].contains($0.name.text) }) else {
+      return false
+    }
+    return bindings.allSatisfy { binding in
+      guard let accessors = binding.accessorBlock?.accessors else { return true }
+      // willSet / didSet だけのプロパティは保存プロパティ。
+      guard case .accessors(let list) = accessors else { return false }
+      return list.allSatisfy {
+        [.keyword(.willSet), .keyword(.didSet)].contains($0.accessorSpecifier.tokenKind)
+      }
+    }
   }
 
   var singleIdentifier: String? {

@@ -212,6 +212,10 @@
             var isEmpty: Bool { name.isEmpty }
 
             var _$tracking = Redux.StateTrackingContext()
+
+            static var _$hasUntrackedProperties: Bool {
+              true
+            }
           }
 
           extension Profile: Redux.TrackedState {
@@ -234,6 +238,10 @@
             var name = ""
 
             var _$tracking = Redux.StateTrackingContext()
+
+            static var _$hasUntrackedProperties: Bool {
+              false
+            }
           }
 
           extension Profile: Redux.TrackedState {

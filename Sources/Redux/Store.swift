@@ -75,7 +75,11 @@ public final class Store<State: Sendable, Action: Sendable>: Observable {
   public subscript<Value: TrackedState>(
     dynamicMember keyPath: KeyPath<State, Value> & Sendable
   ) -> Value {
-    trackedValue(at: keyPath)
+    if Value._$hasUntrackedProperties {
+      // 追跡できないプロパティがあり、値が Equatable でないので、State 全体の変化で通知する。
+      registrar.access(self, keyPath: \.state)
+    }
+    return trackedValue(at: keyPath)
   }
 
   /// State のプロパティ（``TrackedState`` で `Equatable` な値）を読みます。
@@ -84,7 +88,11 @@ public final class Store<State: Sendable, Action: Sendable>: Observable {
   public subscript<Value: TrackedState & Equatable>(
     dynamicMember keyPath: KeyPath<State, Value> & Sendable
   ) -> Value {
-    trackedValue(at: keyPath)
+    if Value._$hasUntrackedProperties {
+      // 追跡できないプロパティがあるので、値全体の変化でも通知する。
+      trackedKeyPath(for: keyPath).access(self)
+    }
+    return trackedValue(at: keyPath)
   }
 
   /// State のプロパティを読みます。

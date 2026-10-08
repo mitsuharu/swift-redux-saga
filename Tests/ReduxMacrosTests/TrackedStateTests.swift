@@ -21,7 +21,16 @@ struct Profile: Sendable, Equatable {
   var isAdult: Bool { age >= 20 }
 }
 
+/// 追跡の仕組みを入れられないプロパティ（let と プロパティラッパー）を持つ型。
+@TrackedState
+struct Form: Sendable, Equatable {
+  let id: Int
+  @BindableState var draft = ""
+  var note: String = ""
+}
+
 struct TrackedAppState: Sendable, Equatable {
+  var form = Form(id: 0)
   var profile = Profile()
   var count = 0
 }
@@ -32,6 +41,8 @@ enum TrackedAppAction: Sendable {
   case move(String)
   case increment
   case replaceProfile(Profile)
+  case editDraft(String)
+  case replaceForm(Form)
 }
 
 let trackedReducer = Reducer<TrackedAppState, TrackedAppAction> { state, action in
@@ -41,6 +52,8 @@ let trackedReducer = Reducer<TrackedAppState, TrackedAppAction> { state, action 
   case .move(let city): state.profile.address.city = city
   case .increment: state.count += 1
   case .replaceProfile(let profile): state.profile = profile
+  case .editDraft(let draft): state.form.draft = draft
+  case .replaceForm(let form): state.form = form
   }
 }
 
@@ -92,6 +105,15 @@ let trackedReducer = Reducer<TrackedAppState, TrackedAppAction> { state, action 
       reading: { _ = $0.profile.name },
       actions: [.replaceProfile(Profile()), .replaceProfile(other)])
     #expect(result == [false, true])
+  }
+
+  @Test func untrackablePropertiesAreNotifiedThroughTheWholeValue() {
+    let result = notifications(
+      reading: { _ = $0.form.draft },
+      actions: [.birthday, .editDraft("a"), .replaceForm(Form(id: 1, draft: "a"))])
+    #expect(result == [false, true, true])
+    #expect(Form._$hasUntrackedProperties)
+    #expect(!Profile._$hasUntrackedProperties)
   }
 
   @Test func readingTheWholeStateStillTracksEverything() {
