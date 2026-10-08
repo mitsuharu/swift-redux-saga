@@ -14,6 +14,7 @@ import Observation
 public final class Store<State: Sendable, Action: Sendable>: Observable {
   private var currentState: State
   private let reducer: Reducer<State, Action>
+  private let middleware: [any Middleware<State, Action>]
   // `@Observable` マクロを使わないのは、5.4 のキーパス単位の通知を自前で行うため。
   private let registrar = ObservationRegistrar()
   private var pendingActions: [Action] = []
@@ -24,9 +25,19 @@ public final class Store<State: Sendable, Action: Sendable>: Observable {
   /// - Parameters:
   ///   - initialState: State の初期値。
   ///   - reducer: Action を State に適用する reducer。
-  public init(initialState: State, reducer: Reducer<State, Action>) {
+  ///   - middleware: Action が reducer に届くまでに通すミドルウェア。配列の順に呼ばれます。
+  public init(
+    initialState: State,
+    reducer: Reducer<State, Action>,
+    middleware: [any Middleware<State, Action>] = []
+  ) {
     self.currentState = initialState
     self.reducer = reducer
+    self.middleware = middleware
+    let api = MiddlewareAPI(store: self)
+    for middleware in middleware {
+      middleware.attach(to: api)
+    }
   }
 
   /// 現在の State。
@@ -37,7 +48,12 @@ public final class Store<State: Sendable, Action: Sendable>: Observable {
     return currentState
   }
 
-  /// Action を reducer に適用し、State を更新します。
+  /// Observation の追跡に登録せずに State を読む（ミドルウェア用）。
+  var untrackedState: State {
+    currentState
+  }
+
+  /// Action をミドルウェアと reducer に通し、State を更新します。
   ///
   /// 処理は同期で、戻った時点で State は更新済みです。
   /// dispatch の処理中（Observation の通知の中など）に呼ばれた Action は、
@@ -50,7 +66,17 @@ public final class Store<State: Sendable, Action: Sendable>: Observable {
     isDispatching = true
     defer { isDispatching = false }
     while !pendingActions.isEmpty {
-      apply(pendingActions.removeFirst())
+      run(pendingActions.removeFirst(), throughMiddlewareAt: 0)
+    }
+  }
+
+  private func run(_ action: Action, throughMiddlewareAt index: Int) {
+    guard index < middleware.count else {
+      apply(action)
+      return
+    }
+    middleware[index].handle(action, store: MiddlewareAPI(store: self)) { action in
+      run(action, throughMiddlewareAt: index + 1)
     }
   }
 
