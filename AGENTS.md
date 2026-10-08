@@ -71,6 +71,18 @@
 - 並行処理のテストは `TestClock` や `settle()` を使い、実時間や `Task.yield()` の回数に依存しない。フレーキーなテストを入れない。
 - キャンセル、エラー、競合するタイミングのケースを必ず含める。
 
+## GitHub Actions
+
+- サードパーティを含むすべてのアクションは、タグではなく**コミットの完全な SHA** で固定し、行末にバージョンをコメントで書く（GitHub 公式のセキュリティ強化ガイドの推奨）。
+
+  ```yaml
+  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+  ```
+
+- SHA は推測で書かず、公式リポジトリのリリースタグから確認する（例: `gh api repos/actions/checkout/git/ref/tags/v7.0.1`。注釈付きタグの場合は指すコミットまでたどる）。
+- アクションを更新するときは SHA とコメントのバージョンを同時に更新する。
+- runner イメージと Xcode のバージョンも推測で書かず、[actions/runner-images](https://github.com/actions/runner-images) の公開情報で確認する。
+
 ## よく使うコマンド
 
 ```sh
