@@ -645,8 +645,21 @@ extension ActionPattern where Value == Action, Action: Equatable {
 | `throttle` | `func throttle<V>(_ d: Duration, _ p, _ worker) -> SagaTask` | 起動後 `d` の間は最新の 1 件だけ残し、`d` の後に処理する |
 | `all` | `func all<each R>(_ ops: repeat @Sendable (SagaContext) async throws -> each R) async throws -> (repeat each R)` | 各処理は fork した子で、自分の ctx を受け取る。1 つでも失敗したら他をキャンセルし、エラーは呼び出し元で catch できる |
 | `race` | `func race<each R>(_ ops: repeat @Sendable (SagaContext) async throws -> each R) async throws -> (repeat (each R)?)` | 最初に終わったもの以外はキャンセル。戻り値は勝者のみ非 nil |
-| `actionChannel` | `func actionChannel<V>(_ p, buffer: ChannelBuffer) -> SagaChannel<V>` | |
-| `eventChannel` | `func eventChannel<V>(buffer:, _ subscribe:) -> SagaChannel<V>` / `func eventChannel(from: some AsyncSequence)` | |
+| `actionChannel` | `func actionChannel<V>(_ p, buffer: ChannelBuffer = .unbounded) -> SagaChannel<V>` | 作った時点から溜める。作った Saga が終わると閉じる |
+| `eventChannel` | `func eventChannel<V>(buffer:, _ subscribe: (emit, finish) -> unsubscribe) -> SagaChannel<V>` / `func eventChannel(buffer:, from: some AsyncSequence)` | 閉じると unsubscribe を呼ぶ。作った Saga が終わると閉じる |
+
+```swift
+public enum ChannelBuffer: Sendable { case unbounded, newest(Int), oldest(Int) }
+
+/// 受け取り側は 1 つの Saga だけ。AsyncSequence なので for try await で読める。
+public struct SagaChannel<Value: Sendable>: Sendable, AsyncSequence {
+  public func take() async throws -> Value?   // 閉じられて空なら nil
+  public func close()
+}
+```
+
+- チャネルは作った Saga の終了で自動的に閉じる。閉じ忘れによる購読のリークを防ぐため（redux-saga では明示的に閉じる必要がある）。
+- `eventChannel(from:)` のシーケンスの読み取りは、チャネルが持つ非構造化の `Task` で行う。外部のイベント源の寿命が Saga の木と一致しないため。チャネルが閉じたらキャンセルする。
 
 `call` を使わず `try await useCase.execute(id)` と直接書いても動きます。`call` を使うと、呼び出し前のキャンセル確認と、モニタ（[8 章](#8-エラー処理)）への記録が行われます。
 
