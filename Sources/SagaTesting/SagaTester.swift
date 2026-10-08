@@ -93,14 +93,7 @@ public final class SagaTester<State: Sendable, Action: Sendable>: Sendable {
   ///
   /// 起きた Saga がさらに `delay` し、その起床時刻が進めた範囲に入っている場合も起こします。
   public func advance(by duration: Duration) async {
-    await settle()
-    let target = clock.now.advanced(by: duration)
-    while let next = clock.nextDeadline, next <= target {
-      clock.advance(to: next)
-      await settle()
-    }
-    clock.advance(to: target)
-    await settle()
+    await clock.advance(by: duration) { await settle() }
   }
 
   /// Saga が次に発行した Action を取り出し、期待した Action と等しいかを確かめます。

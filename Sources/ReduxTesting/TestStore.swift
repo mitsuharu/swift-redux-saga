@@ -166,14 +166,7 @@ public final class TestStore<State: Sendable & Equatable, Action: Sendable> {
 
   /// 時計を進めます。進めた範囲で起きる Saga を順に起こし、そのたびに Saga が止まるまで待ちます。
   public func advance(by duration: Duration) async {
-    await settle()
-    let target = clock.now.advanced(by: duration)
-    while let next = clock.nextDeadline, next <= target {
-      clock.advance(to: next)
-      await settle()
-    }
-    clock.advance(to: target)
-    await settle()
+    await clock.advance(by: duration) { await settle() }
   }
 
   /// テストを終えます。Saga を止め、確かめていない Action や未処理のエラーがないことを確かめます。
