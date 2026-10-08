@@ -74,13 +74,11 @@
 | 7-1 | `feature/example-domain` | `Examples/` のローカルパッケージ（`Domain` / `AppFeature`）+ テスト （[#29](https://github.com/mitsuharu/swift-redux-saga/pull/29)） |
 | 7-2 | `feature/example-swiftui` | SwiftUI / UIKit サンプルアプリ（`Examples.xcodeproj`）と CI でのビルド（7-3、7-4 を統合） （[#30](https://github.com/mitsuharu/swift-redux-saga/pull/30)） |
 
-## M8: マクロ（任意）
+## M8: マクロ
 
 | # | ブランチ | 内容 |
 | --- | --- | --- |
-| 8-1 | `feature/macros-target` | `ReduxMacros` ターゲット（swift-syntax）の追加 |
-| 8-2 | `feature/case-pattern-macro` | enum の case から `ActionPattern` を生成するマクロ + テスト |
-| 8-3 | `feature/slice-macro` | `@Slice` マクロ + テスト |
+| 8-1 | `feature/macros` | `ReduxMacros`（swift-syntax）、`@ActionCases`、`@Slice`、キーパス版の `ActionPattern.case` / `Reducer.scope` / `slice` + テスト、Example への適用（8-2、8-3 を統合） |
 
 ## M9: ドキュメント整備
 

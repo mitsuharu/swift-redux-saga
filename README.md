@@ -37,6 +37,7 @@ dependencies: [
 | `ReduxSaga` | Store に Saga を載せる `SagaMiddleware` |
 | `ReduxSwiftUI` / `ReduxUIKit` | SwiftUI / UIKit 用のヘルパー |
 | `SagaTesting` / `ReduxTesting` | テスト支援（`TestClock` / `SagaTester` / `TestStore`） |
+| `ReduxMacros` | マクロ（`@ActionCases` / `@Slice`）。使う場合だけ追加します |
 
 ## 使い方
 
@@ -130,6 +131,32 @@ let fetch = ActionPattern<AppAction, User.ID>.case {
 }
 let id = try await ctx.take(fetch)
 ```
+
+### マクロ（ReduxMacros）
+
+`@ActionCases` を enum に付けると、case ごとに関連値を取り出すプロパティが生成され、`if case ... else nil` を書かずに済みます。`@Slice` は Slice への準拠、`initialState`、`Action` への `@ActionCases` を補います。
+
+```swift
+import ReduxMacros
+
+@Slice
+enum Counter {
+  struct State: Sendable, Equatable { var count = 0 }
+  enum Action: Sendable, Equatable { case increment, fetch, fetched(Int) }
+  static func reduce(into state: inout State, action: Action) { ... }
+}
+
+@ActionCases
+enum AppAction: Sendable {
+  case counter(Counter.Action)
+  case user(UserAction)
+}
+
+Reducer.slice(Counter.self, state: \.counter, action: \.counter)
+ctx.takeEvery(.case(\.user?.fetch)) { ctx, id in ... }
+```
+
+マクロなしでも同じことができます（`.case { if case .user(.fetch(let id)) = $0 { id } else { nil } }`）。Xcode は初めてマクロを使うときに許可を求めます。
 
 ### Store と組み立て
 

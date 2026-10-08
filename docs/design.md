@@ -92,7 +92,7 @@ swift-redux-saga
 ├── ReduxUIKit       UIKit 用ヘルパー（Redux）
 ├── SagaTesting      TestClock、SagaTester、Action の記録（Saga）
 ├── ReduxTesting     TestStore（Redux + ReduxSaga + SagaTesting）
-├── ReduxMacros      マクロ（任意・最後に追加。swift-syntax に依存）
+├── ReduxMacros      マクロ（@ActionCases / @Slice）。実装の ReduxMacrosPlugin だけが swift-syntax に依存
 └── InternalPrimitives  内部で共有する部品（`Locked` など）。プロダクトにせず `package` アクセスで使う
 ```
 
@@ -901,14 +901,62 @@ Examples/
 
 ---
 
-## 12. マクロ（任意）
+## 12. マクロ
 
-マクロは最後に、別ターゲット `ReduxMacros` として追加します。マクロなしで全機能が使える API を先に完成させます。
+`ReduxMacros` ターゲット（プロダクト）で提供します。マクロの実装（`ReduxMacrosPlugin`）だけが swift-syntax に依存します。マクロなしでも全機能が使えます。
 
-候補:
+### `@ActionCases`
 
-- `@CasePathable` 相当（名前は実装時に決定）: enum の各 case について `ActionPattern` と抽出クロージャを生成する（`.case(\.user.fetch)` に近い書き方を可能にする）。
-- `@Slice`: Slice の定型コードを生成する。
+enum の case ごとに、「その case なら関連値を返し、そうでなければ `nil` を返す」プロパティを生成します。
+
+```swift
+@ActionCases
+enum AppAction: Sendable {
+  case user(UserAction)          // var user: (UserAction)?
+  case rename(first: String, last: String)   // var rename: (first: String, last: String)?
+  case reset                     // var reset: Void?
+}
+```
+
+生成されたプロパティのキーパスを、マクロに依存しない次の API に渡します。
+
+```swift
+extension ActionPattern {
+  public static func `case`(_ keyPath: KeyPath<Action, Value?> & Sendable) -> Self
+}
+extension Reducer {
+  public static func scope(state:action: KeyPath<Action, ChildAction?> & Sendable, reducer:) -> Reducer
+  public static func slice(_:state:action: KeyPath<Action, S.Action?> & Sendable) -> Reducer
+}
+
+ctx.takeEvery(.case(\.user?.fetch)) { ctx, id in ... }        // ネストした enum もたどれる
+Reducer.slice(Counter.self, state: \.counter, action: \.counter)
+```
+
+- ActionPattern の静的メンバー（`.user`）を生成しないのは、拡張マクロは付けた型にしか拡張を追加できず、`ActionPattern` を拡張できないため。プロパティを生成してキーパスで渡す形にした。
+- キーパス版の API はマクロに依存しない。手書きのプロパティでも使える。
+
+### `@Slice`
+
+```swift
+@Slice
+enum Counter {
+  struct State: Sendable, Equatable { var count = 0 }
+  enum Action: Sendable { case increment }
+  static func reduce(into state: inout State, action: Action) { ... }
+}
+```
+
+- `Slice` への準拠を追加する（拡張マクロ）。
+- `initialState` がなければ `static let initialState = State()` を追加する。
+- 中の `enum Action` に `@ActionCases` を付ける。
+- `State` / `Action` に `Sendable` を自動で付けない。拡張マクロは付けた型（`Counter`）にしか準拠を追加できず、中の型には付けられないため。
+- default MainActor isolation のモジュールでは `@Slice nonisolated enum Counter` と書く。
+
+### 利用時の注意
+
+- Xcode は初めてパッケージのマクロを使うときに許可を求める。`xcodebuild` では `-skipMacroValidation` を付ける（CI で設定済み）。
+- swift-syntax の版は `600.0.0..<605.0.0` の範囲で解決する。利用者の Xcode に同梱のビルド済み swift-syntax を選べるようにするため。
 
 ---
 

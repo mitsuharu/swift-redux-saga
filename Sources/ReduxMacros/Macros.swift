@@ -26,7 +26,7 @@ import Redux
 @attached(member, names: arbitrary)
 public macro ActionCases() = #externalMacro(module: "ReduxMacrosPlugin", type: "ActionCasesMacro")
 
-/// enum を ``Redux/Slice`` にします。
+/// enum を `Slice` にします。
 ///
 /// - `Slice` への準拠を追加します。
 /// - `initialState` がなければ `static let initialState = State()` を追加します。
