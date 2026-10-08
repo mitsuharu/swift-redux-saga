@@ -61,11 +61,12 @@ public macro Slice() = #externalMacro(module: "ReduxMacrosPlugin", type: "SliceM
 /// }
 /// ```
 ///
-/// - 対象は型を書いた `var` の保存プロパティです（`let` や計算プロパティは対象外。計算プロパティは、中で読んだ
-///   保存プロパティが追跡されます）。
+/// - 対象は型を書いた `var` の保存プロパティです。計算プロパティは、中で読んだ保存プロパティが追跡されます。
+/// - `let` やプロパティラッパー付き（`@BindableState` など）のプロパティは追跡の仕組みを入れられないため、
+///   それらを含む型の値は、値全体が変わったときに通知します（通知の漏れはありませんが、細かくはなりません）。
 /// - `Codable` の自動準拠を使う場合、キーが `_name` になる点に注意してください（`CodingKeys` を書いてください）。
 /// - 値全体を比較したり受け渡したりするだけでは追跡されません。読んだプロパティだけが追跡されます。
-@attached(member, names: named(_$tracking))
+@attached(member, names: named(_$tracking), named(_$hasUntrackedProperties))
 @attached(extension, conformances: TrackedState)
 @attached(memberAttribute)
 public macro TrackedState() =
