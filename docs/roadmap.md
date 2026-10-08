@@ -15,7 +15,7 @@
 | # | ブランチ | 内容 |
 | --- | --- | --- |
 | 1-1 | `feature/package-layout` | Package.swift を設計のターゲット構成に更新（tools 6.2、空のターゲットとテストターゲット） （[#2](https://github.com/mitsuharu/swift-redux-saga/pull/2)） |
-| 1-2 | `feature/reducer` | `Reducer`、`combine`、`scope`、`ReducerBuilder` + テスト |
+| 1-2 | `feature/reducer` | `Reducer`、`combine`、`scope`、`ReducerBuilder` + テスト （[#3](https://github.com/mitsuharu/swift-redux-saga/pull/3)） |
 | 1-3 | `feature/store` | `@MainActor @Observable Store`、`dispatch`、再入検出 + テスト |
 | 1-4 | `feature/middleware` | `Middleware` プロトコル、`MiddlewareAPI`、ミドルウェアチェーン + テスト |
 | 1-5 | `feature/keypath-observation` | キーパス単位の Observation 追跡（設計書 5.4）+ テスト |
