@@ -64,7 +64,7 @@
 | # | ブランチ | 内容 |
 | --- | --- | --- |
 | 6-1 | `feature/swiftui-helpers` | `ReduxSwiftUI`: Environment、`binding` + テスト （[#27](https://github.com/mitsuharu/swift-redux-saga/pull/27)） |
-| 6-2 | `feature/uikit-helpers` | `ReduxUIKit`: 購読トークンの寿命管理など + テスト |
+| 6-2 | `feature/uikit-helpers` | `ReduxUIKit`: 購読トークンの寿命管理など + テスト （[#28](https://github.com/mitsuharu/swift-redux-saga/pull/28)） |
 | 6-3 | `ci/ios-simulator-tests` | CI に iOS シミュレータでのテストを追加（必要なら） |
 
 ## M7: Example

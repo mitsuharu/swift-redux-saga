@@ -848,7 +848,21 @@ extension View {
 
 - iOS 26 以降（および `UIObservationTrackingEnabled` を有効にした iOS 18 以降）は、`viewWillLayoutSubviews()` / `layoutSubviews()` / `updateProperties()` などで `store.count` を読むだけで UIKit が自動で追跡する。ライブラリ側の追加作業はない（5.4 の追跡単位がそのまま効く）。
 - それ以前の OS や、ライフサイクル外で購読したい場合は `store.observe(_:onChange:)`（5.9）を使う。
-- ヘルパー: `ObservationToken` を `UIViewController` の寿命に結びつけるユーティリティなど、最小限にする。
+- ヘルパー:
+
+```swift
+extension ObservationToken {
+  /// owner が解放されるまで購読を続ける（Associated Object で保持）。
+  public func retained(by owner: AnyObject)
+}
+
+extension Store {
+  /// 実行すると Action を dispatch する UIAction（Store は弱参照）。
+  public func action(_ action: Action, title: String = "", image: UIImage? = nil) -> UIAction
+}
+```
+
+- `retained(by:)` の Associated Object のキーにトークン自身のアドレスを使う。グローバルな可変のキーを持たないため。
 
 ---
 
