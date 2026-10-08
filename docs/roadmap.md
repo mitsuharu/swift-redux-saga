@@ -71,7 +71,7 @@
 
 | # | ブランチ | 内容 |
 | --- | --- | --- |
-| 7-1 | `feature/example-domain` | `Examples/` のローカルパッケージ（`Domain` / `AppFeature`）+ テスト |
+| 7-1 | `feature/example-domain` | `Examples/` のローカルパッケージ（`Domain` / `AppFeature`）+ テスト （[#29](https://github.com/mitsuharu/swift-redux-saga/pull/29)） |
 | 7-2 | `feature/example-swiftui` | SwiftUI サンプルアプリ |
 | 7-3 | `feature/example-uikit` | UIKit サンプルアプリ |
 | 7-4 | `ci/example-build` | CI で Example をビルド |
