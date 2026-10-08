@@ -1,8 +1,197 @@
-# ReSwift-Saga からの移行ガイド
+# ReSwift / ReSwift-Saga からの移行ガイド
 
-[ReSwift-Saga](https://github.com/mitsuharu/ReSwift-Saga) から swift-redux-saga に移行するための対応表と手順です。設計の違いの理由は[設計書 13 章](design.md#13-旧実装reswift-sagaからの変更点)を参照してください。
+[ReSwift](https://github.com/ReSwift/ReSwift) と [ReSwift-Saga](https://github.com/mitsuharu/ReSwift-Saga) から swift-redux-saga に移行するための対応表と手順です。
 
-## 対応表
+- ReSwift だけを使っている場合は「[ReSwift からの移行](#reswift-からの移行)」を読んでください。
+- ReSwift-Saga も使っている場合は、続けて「[ReSwift-Saga からの移行](#reswift-saga-からの移行)」を読んでください。
+
+設計の違いの理由は[設計書](design.md)（特に 4 章の並行性、5 章の Redux、13 章の旧実装からの変更点）を参照してください。
+
+## ReSwift からの移行
+
+### 対応表
+
+| ReSwift | swift-redux-saga（`Redux`） |
+| --- | --- |
+| `Store<AppState>(reducer:state:middleware:)` | `Store<AppState, AppAction>(initialState:reducer:middleware:)`（`@MainActor`、`Observable`） |
+| `protocol Action` に準拠した struct | `Sendable` な enum（存在型 `any AppActionProtocol` も使える） |
+| `func appReducer(action: Action, state: AppState?) -> AppState` | `Reducer<AppState, AppAction> { state, action in ... }`（`inout`） |
+| 子の reducer を手で呼び分ける | `Reducer.scope` / `Reducer.slice`、`Slice` プロトコル、`@Slice` マクロ |
+| `StoreSubscriber` と `subscribe` / `unsubscribe` / `newState(state:)` | SwiftUI では `store.count` を読むだけ。UIKit では `store.observe { ... }`（iOS 26 以降は自動追跡） |
+| `subscribe(self) { $0.select { $0.counter } }` | `store.observe { $0.counter } onChange: { ... }` |
+| `skipRepeats` / `automaticallySkipsRepeats` | 不要（`Equatable` なプロパティは値が変わったときだけ通知される） |
+| `Middleware<AppState>`（`dispatch` / `getState` / `next` のクロージャ） | `Middleware` プロトコルの `handle(_:store:next:)` |
+| ReSwift-Thunk などの非同期処理 | Saga（`ReduxSaga` の `SagaMiddleware`） |
+| どのスレッドからでも `dispatch` | `dispatch` はメインアクター上で呼ぶ。メインアクター外からは `await MainActor.run { ... }` か Saga の `put` |
+
+### 手順
+
+#### 1. Action と State を Sendable にする
+
+Swift 6 言語モードでは、Store（メインアクター）と Saga（メインアクター外）の間で Action と State を受け渡すため、両方とも `Sendable` にします。Action は enum にすると、`switch` で漏れなく扱えます。
+
+```swift
+// Before（ReSwift）
+struct IncrementCounter: Action {}
+struct SetCounter: Action { let value: Int }
+
+// After
+enum CounterAction: Sendable, Equatable {
+  case increment
+  case set(Int)
+}
+```
+
+#### 2. reducer を inout にし、Slice にまとめる
+
+```swift
+// Before
+func counterReducer(action: Action, state: CounterState?) -> CounterState {
+  var state = state ?? CounterState()
+  switch action {
+  case _ as IncrementCounter: state.count += 1
+  case let action as SetCounter: state.count = action.value
+  default: break
+  }
+  return state
+}
+
+func appReducer(action: Action, state: AppState?) -> AppState {
+  AppState(counter: counterReducer(action: action, state: state?.counter))
+}
+
+// After（マクロなし）
+enum Counter: Slice {
+  struct State: Sendable, Equatable { var count = 0 }
+  typealias Action = CounterAction
+  static let initialState = State()
+  static func reduce(into state: inout State, action: Action) {
+    switch action {
+    case .increment: state.count += 1
+    case .set(let value): state.count = value
+    }
+  }
+}
+
+let appReducer = Reducer<AppState, AppAction> {
+  Reducer.slice(Counter.self, state: \.counter) { if case .counter(let a) = $0 { a } else { nil } }
+}
+
+// After（マクロあり）: @ActionCases を AppAction に付けると action: \.counter と書ける
+let appReducer = Reducer<AppState, AppAction> {
+  Reducer.slice(Counter.self, state: \.counter, action: \.counter)
+}
+```
+
+#### 3. Store を作る
+
+```swift
+// Before
+let store = Store<AppState>(reducer: appReducer, state: nil, middleware: [loggingMiddleware])
+
+// After（Store はメインアクター上で作り、メインアクター上で dispatch する）
+let store = Store(initialState: AppState(), reducer: appReducer, middleware: [LoggingMiddleware()])
+```
+
+#### 4. 購読（StoreSubscriber）を置き換える
+
+```swift
+// Before（ReSwift）
+final class CounterViewController: UIViewController, StoreSubscriber {
+  override func viewWillAppear(_ animated: Bool) {
+    super.viewWillAppear(animated)
+    store.subscribe(self) { $0.select { $0.counter.count }.skipRepeats() }
+  }
+  override func viewWillDisappear(_ animated: Bool) {
+    super.viewWillDisappear(animated)
+    store.unsubscribe(self)
+  }
+  func newState(state: Int) { label.text = "\(state)" }
+}
+
+// After（UIKit、iOS 17 から）
+override func viewDidLoad() {
+  super.viewDidLoad()
+  store.observe { $0.counter.count } onChange: { [weak self] count in
+    self?.label.text = "\(count)"
+  }
+  .retained(by: self)   // View Controller が解放されると購読も止まる
+}
+
+// After（UIKit、iOS 26 以降）: 読むだけで自動で追跡される
+override func updateProperties() {
+  super.updateProperties()
+  label.text = "\(store.counter.count)"
+}
+
+// After（SwiftUI）
+struct CounterView: View {
+  @Environment(Store<AppState, AppAction>.self) private var store
+  var body: some View { Text("\(store.counter.count)") }
+}
+```
+
+`select` と `skipRepeats` に相当する処理は不要です。Store のプロパティを直接読むと、そのプロパティの値が変わったときだけ通知されます（設計書 5.4）。
+
+#### 5. ミドルウェアを書き換える
+
+```swift
+// Before（ReSwift）
+let loggingMiddleware: Middleware<AppState> = { dispatch, getState in
+  { next in
+    { action in
+      print(action)
+      next(action)
+    }
+  }
+}
+
+// After
+struct LoggingMiddleware: Middleware {
+  func handle(_ action: AppAction, store: MiddlewareAPI<AppState, AppAction>, next: (AppAction) -> Void) {
+    print(action)
+    next(action)
+  }
+}
+```
+
+`next` はその場でしか呼べません（エスケープしない）。非同期の処理は、ミドルウェアではなく Saga に書いてください。
+
+#### 6. 非同期処理（ReSwift-Thunk など）を Saga にする
+
+```swift
+// Before（ReSwift-Thunk）
+let fetchCounter = Thunk<AppState> { dispatch, getState in
+  Task {
+    let value = try await api.fetchCounter()
+    await MainActor.run { dispatch(SetCounter(value: value)) }
+  }
+}
+
+// After（Saga）
+struct CounterSagas: Sendable {
+  let fetchCounter: @Sendable () async throws -> Int   // 依存は注入する
+
+  var root: Saga<AppState, AppAction> {
+    Saga { ctx in
+      ctx.takeLatest(.action(.counter(.fetch))) { ctx, _ in
+        let value = try await ctx.call(fetchCounter)
+        await ctx.put(.counter(.set(value)))
+      }
+    }
+  }
+}
+```
+
+Saga の書き方は「[ReSwift-Saga からの移行](#reswift-saga-からの移行)」と README を参照してください。
+
+#### 7. テストを書き換える
+
+reducer は純粋関数なので、そのまま `reduce(into:action:)` を呼んでテストできます。Store と Saga をまとめて検証するときは `ReduxTesting` の `TestStore` を使います。
+
+## ReSwift-Saga からの移行
+
+### 対応表
 
 | ReSwift-Saga | swift-redux-saga |
 | --- | --- |
@@ -21,9 +210,9 @@
 | `StoreSubscriber` と `subscribe` / `unsubscribe` | SwiftUI では `store.count` を読むだけ。UIKit では `store.observe { ... }`（iOS 26 以降は自動追跡） |
 | `Bridge.shared`（グローバル） | なし（Action の配信はミドルウェアのインスタンスが持つ） |
 
-## 手順
+### 手順
 
-### 1. Action を enum にする
+#### 1. Action を enum にする
 
 ```swift
 // Before
@@ -40,7 +229,7 @@ enum UserAction: Sendable, Equatable {
 
 struct のまま移行したい場合は、Action をプロトコルの存在型（`any AppActionProtocol`）にして `ActionPattern.type(RequestUser.self)` で判定できます。ただし Action と State は `Sendable` にしてください。
 
-### 2. reducer を inout にする
+#### 2. reducer を inout にする
 
 ```swift
 // Before
@@ -56,7 +245,7 @@ let userReducer = Reducer<UserState, UserAction> { state, action in
 }
 ```
 
-### 3. Saga を SagaContext を受け取る形にする
+#### 3. Saga を SagaContext を受け取る形にする
 
 旧実装の Saga は Action を引数に取り、ワーカーが Action をキャストしていました。新しい Saga は `SagaContext` を受け取り、ワーカーにはパターンで取り出した値だけが渡ります。
 
@@ -86,7 +275,7 @@ struct UserSagas: Sendable {
 }
 ```
 
-### 4. Store と Saga を組み立てる
+#### 4. Store と Saga を組み立てる
 
 ```swift
 @MainActor
@@ -100,7 +289,7 @@ func makeStore(api: UserAPI) -> Store<UserState, UserAction> {
 
 起動直後の Action の扱いが redux-saga / 旧実装と異なります。`run` の直後に dispatch した Action は、まだ待ち始めていない Saga に届かないことがあるため、起動時の処理はルート Saga の中に書いてください（[設計書 7 章](design.md#起動直後の-actionredux-saga-との違い)）。
 
-### 5. View の購読を置き換える
+#### 5. View の購読を置き換える
 
 ```swift
 // Before（ObservableObject + StoreSubscriber）
@@ -116,6 +305,6 @@ struct UserView: View {
 }
 ```
 
-### 6. テストを結果の検証にする
+#### 6. テストを結果の検証にする
 
 `SagaTester`（Saga だけ）や `TestStore`（Store と Saga）で、送った Action に対して発行された Action と State を検証します。詳しくは [README](../README.md#テスト) を参照してください。
