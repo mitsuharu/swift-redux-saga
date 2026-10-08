@@ -641,8 +641,8 @@ extension ActionPattern where Value == Action, Action: Equatable {
 | `takeEvery` | `func takeEvery<V>(_ p, _ worker: (SagaContext, V) async throws -> Void) -> SagaTask` | 非ブロッキング（内部で fork）。ワーカーは並行に動く |
 | `takeLatest` | `func takeLatest<V>(_ p, _ worker) -> SagaTask` | 前回のワーカーをキャンセルしてから起動 |
 | `takeLeading` | `func takeLeading<V>(_ p, _ worker) -> SagaTask` | 実行中に届いた Action は捨てる |
-| `debounce` | `func debounce<V>(_ d: Duration, _ p, _ worker) -> SagaTask` | |
-| `throttle` | `func throttle<V>(_ d: Duration, _ p, _ worker) -> SagaTask` | |
+| `debounce` | `func debounce<V>(_ d: Duration, _ p, _ worker) -> SagaTask` | 静かな期間の後に最後の Action で起動。起動したワーカーは後の Action でキャンセルしない |
+| `throttle` | `func throttle<V>(_ d: Duration, _ p, _ worker) -> SagaTask` | 起動後 `d` の間は最新の 1 件だけ残し、`d` の後に処理する |
 | `all` | `func all<each R>(_ ops: repeat @Sendable () async throws -> each R) async throws -> (repeat each R)` | 1 つでも失敗したら他をキャンセル |
 | `race` | `func race<each R>(_ ops: repeat @Sendable () async throws -> each R) async throws -> (repeat (each R)?)` | 最初に終わったもの以外はキャンセル。戻り値は勝者のみ非 nil |
 | `actionChannel` | `func actionChannel<V>(_ p, buffer: ChannelBuffer) -> SagaChannel<V>` | |

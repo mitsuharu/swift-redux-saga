@@ -93,4 +93,51 @@ extension SagaContext {
       try await worker(ctx, value)
     }
   }
+
+  /// パターンに一致する Action が `duration` のあいだ届かなくなってから、最後の Action で `worker` を起動します
+  /// （redux-saga の `debounce`）。
+  ///
+  /// 文字入力のたびに届く Action を、入力が止まってから 1 回だけ処理したい場合に使います。
+  /// 起動したワーカーは、その後に届いた Action ではキャンセルされません。
+  ///
+  /// - Returns: ヘルパーのハンドル。キャンセルするとワーカーも止まります。
+  @discardableResult
+  public func debounce<Value>(
+    _ duration: Duration,
+    _ pattern: ActionPattern<Action, Value>,
+    _ worker: @escaping @Sendable (SagaContext, Value) async throws -> Void
+  ) -> SagaTask {
+    let channel = subscribe(pattern, buffer: .unbounded)
+    let pending = Locked<SagaTask?>(nil)
+    return forkLoop("debounce", channel) { helper, value in
+      pending.withLock { $0 }?.cancel()
+      // 待っている間に次の Action が来たら、この待機ごとキャンセルする。
+      // ワーカーはヘルパーの子として起動し、後から来た Action の影響を受けないようにする。
+      let timer = helper.fork("debounce.timer") { timer in
+        try await timer.delay(duration)
+        helper.fork("debounce.worker") { try await worker($0, value) }
+      }
+      pending.withLock { $0 = timer }
+    }
+  }
+
+  /// パターンに一致する Action で `worker` を起動し、その後 `duration` のあいだに届いた Action は
+  /// 最後の 1 つだけを残して捨てます（redux-saga の `throttle`）。
+  ///
+  /// 残った Action は、`duration` が過ぎた後にワーカーで処理します。スクロールなど頻繁に届く Action を
+  /// 間引きたい場合に使います。
+  ///
+  /// - Returns: ヘルパーのハンドル。キャンセルするとワーカーも止まります。
+  @discardableResult
+  public func throttle<Value>(
+    _ duration: Duration,
+    _ pattern: ActionPattern<Action, Value>,
+    _ worker: @escaping @Sendable (SagaContext, Value) async throws -> Void
+  ) -> SagaTask {
+    let channel = subscribe(pattern, buffer: .newest(1))
+    return forkLoop("throttle", channel) { helper, value in
+      helper.fork("throttle.worker") { try await worker($0, value) }
+      try await helper.delay(duration)
+    }
+  }
 }
