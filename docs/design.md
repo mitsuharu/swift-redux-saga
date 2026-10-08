@@ -827,11 +827,22 @@ Swift にはジェネレーターがないため、redux-saga の「Effect を 1
 
 ### SwiftUI（`ReduxSwiftUI`）
 
-- `Store` は `@Observable` なので、`@State` / `@Environment` でそのまま扱える。
+- `Store` は `Observable` なので、`@State` / `@Environment` でそのまま扱える。View の中で `store.count` のように読むと、そのプロパティだけが追跡される（5.4）。
 - ヘルパー:
-  - `View.store(_:)`: `Environment` に Store を入れる。
-  - `@Environment(Store<AppState, AppAction>.self)` で取り出す。
-  - `store.binding(\.text, send: AppAction.setText)`: State の値と Action から `Binding` を作る。
+
+```swift
+extension Store {
+  /// State の値と、値が変わったときに dispatch する Action から Binding を作る。
+  public func binding<Value: Equatable>(
+    _ keyPath: KeyPath<State, Value> & Sendable, send: @escaping (Value) -> Action
+  ) -> Binding<Value>
+}
+
+extension View {
+  /// Store を Environment に入れる。子では @Environment(Store<AppState, AppAction>.self) で取り出す。
+  public func store<State, Action>(_ store: Store<State, Action>) -> some View
+}
+```
 
 ### UIKit（`ReduxUIKit`）
 
