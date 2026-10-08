@@ -81,6 +81,27 @@ public final class TestClock: Clock, Sendable {
     advance(to: now.advanced(by: duration))
   }
 
+  /// 時計を進め、進めた範囲で起きるタスクを起床時刻の順に起こします。起こすたびに `settle` で待ちます。
+  ///
+  /// 起きたタスクがさらに眠り、その起床時刻が進めた範囲に入っている場合も起こします。
+  /// `SagaTester` / `TestStore` の `advance(by:)` はこのメソッドを使います。
+  ///
+  /// - Parameters:
+  ///   - duration: 進める時間。
+  ///   - settle: 起きたタスクが止まるまで待つ関数（`SagaTester.settle()` など）。
+  nonisolated(nonsending) public func advance(
+    by duration: Duration, settlingWith settle: () async -> Void
+  ) async {
+    await settle()
+    let target = now.advanced(by: duration)
+    while let next = nextDeadline, next <= target {
+      advance(to: next)
+      await settle()
+    }
+    advance(to: target)
+    await settle()
+  }
+
   /// 指定した時刻まで時計を進め、起床時刻を過ぎたタスクを起こします。過去の時刻を渡した場合は進めません。
   public func advance(to instant: Instant) {
     let woken = storage.withLock { storage -> [Sleeper] in
