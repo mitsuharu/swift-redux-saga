@@ -121,6 +121,42 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
     }
   }
 
+  /// fork された子を実行する。
+  ///
+  /// 子が失敗したらエラーを投げ、親のタスクグループを失敗させる（兄弟と親がキャンセルされる）。
+  /// 子がキャンセルされた場合（個別のキャンセル、親からのキャンセル）はエラーを投げない。
+  func runForked(_ saga: Saga<State, Action>, state: SagaTaskState) async throws {
+    let signal = CancelSignal()
+    state.onCancel { signal.fire() }
+    do {
+      try await withThrowingTaskGroup(of: Bool.self) { group in
+        group.addTask {
+          try await self.runScoped(saga)
+          return true
+        }
+        group.addTask {
+          await signal.wait()
+          return false
+        }
+        // 合図（個別のキャンセル）か親のキャンセルで待機が先に終わったら、本体をキャンセルして本体の結果を待つ。
+        // 本体の結果を待たずに抜けると、本体の CancellationError がタスクグループに捨てられ、完了と区別できないため。
+        let bodyFinishedFirst = try await group.next() ?? true
+        group.cancelAll()
+        if !bodyFinishedFirst {
+          _ = try await group.next()
+        }
+      }
+      state.finish(state.isCancelRequested || Task.isCancelled ? .cancelled : .completed)
+    } catch {
+      if error is CancellationError || state.isCancelRequested || Task.isCancelled {
+        state.finish(.cancelled)
+      } else {
+        state.finish(.failed(error))
+        throw error
+      }
+    }
+  }
+
   /// スコープに子の起動を要求する。
   struct ForkRequest: Sendable {
     let run: @Sendable () async throws -> Void

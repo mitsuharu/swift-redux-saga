@@ -46,6 +46,62 @@ public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
     selector(await runtime.host.state())
   }
 
+  // MARK: - fork / spawn / cancel
+
+  /// Saga を子として起動します（redux-saga の `fork`、attached）。
+  ///
+  /// 呼び出し元は待たずに続きを実行します。子は呼び出し元の Saga のタスクの子タスクとして動くため、
+  /// - 呼び出し元がキャンセルされると、子もキャンセルされます。
+  /// - 子が失敗すると、兄弟と呼び出し元がキャンセルされ、エラーが呼び出し元に伝わります。
+  /// - 呼び出し元の本体が終わっても、子がすべて終わるまで呼び出し元は完了しません。
+  ///
+  /// 子を ``SagaTask/cancel()`` でキャンセルしても、呼び出し元にエラーは伝わりません。
+  @discardableResult
+  public func fork(_ saga: Saga<State, Action>) -> SagaTask {
+    let state = SagaTaskState(activity: runtime.activity)
+    runtime.activity.begin()
+    let accepted = forks.push(
+      SagaRuntime.ForkRequest { [runtime] in try await runtime.runForked(saga, state: state) })
+    if !accepted {
+      // 呼び出し元の本体が終わった後に fork された（コンテキストを外に持ち出した）場合。
+      runtime.activity.end()
+      state.finish(.cancelled)
+    }
+    return SagaTask(state: state)
+  }
+
+  /// 関数を Saga として子に起動します。`fork(_:)` と同じです。
+  @discardableResult
+  public func fork(
+    _ name: String? = nil,
+    _ body: @escaping @Sendable (SagaContext) async throws -> Void
+  ) -> SagaTask {
+    fork(Saga(name, body))
+  }
+
+  /// Saga を呼び出し元から切り離して起動します（redux-saga の `spawn`、detached）。
+  ///
+  /// 呼び出し元のキャンセルや失敗の影響を受けず、子の失敗も呼び出し元に伝わりません。
+  /// ランタイムの停止（``SagaRuntime/stop()``）ではキャンセルされます。
+  @discardableResult
+  public func spawn(_ saga: Saga<State, Action>) -> SagaTask {
+    runtime.run(saga)
+  }
+
+  /// 関数を Saga として切り離して起動します。`spawn(_:)` と同じです。
+  @discardableResult
+  public func spawn(
+    _ name: String? = nil,
+    _ body: @escaping @Sendable (SagaContext) async throws -> Void
+  ) -> SagaTask {
+    spawn(Saga(name, body))
+  }
+
+  /// Saga をキャンセルします。``SagaTask/cancel()`` と同じです。
+  public func cancel(_ task: SagaTask) {
+    task.cancel()
+  }
+
   // MARK: - join
 
   /// Saga が終わるまで待ちます。
