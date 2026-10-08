@@ -1,3 +1,4 @@
+import InternalPrimitives
 import Observation
 
 /// アプリの State を保持し、Action を reducer に通して更新するコンテナ。
@@ -24,6 +25,9 @@ public final class Store<State: Sendable, Action: Sendable>: Observable {
   // 読まれたキーパスごとの、新旧の State で値が変わったかを判定する関数。
   // キーは State 上のキーパス。要素数はコード中で使われるキーパスの種類数で頭打ちになるため、削除しない。
   private var trackedKeyPaths: [AnyKeyPath: TrackedKeyPath] = [:]
+  // TrackedState の中で読まれたキーパス（State から）ごとの、値が変わったかを判定する関数。
+  // 読み取りは TrackedState の値のコピーから行われ、メインアクター外で起き得るため、ロックで守る。
+  private let nestedKeyPaths = Locked<[SendableKeyPath: @Sendable (State, State) -> Bool]>([:])
   private var pendingActions: [Action] = []
   private var isDispatching = false
 
@@ -63,6 +67,24 @@ public final class Store<State: Sendable, Action: Sendable>: Observable {
   ) -> Value {
     trackedKeyPath(for: keyPath).access(self)
     return currentState[keyPath: keyPath]
+  }
+
+  /// State のプロパティ（``TrackedState`` の値）を読みます。
+  ///
+  /// 返した値のプロパティを読むと、そのプロパティが変わったときだけ通知されます。
+  public subscript<Value: TrackedState>(
+    dynamicMember keyPath: KeyPath<State, Value> & Sendable
+  ) -> Value {
+    trackedValue(at: keyPath)
+  }
+
+  /// State のプロパティ（``TrackedState`` で `Equatable` な値）を読みます。
+  ///
+  /// 返した値のプロパティを読むと、そのプロパティが変わったときだけ通知されます。
+  public subscript<Value: TrackedState & Equatable>(
+    dynamicMember keyPath: KeyPath<State, Value> & Sendable
+  ) -> Value {
+    trackedValue(at: keyPath)
   }
 
   /// State のプロパティを読みます。
@@ -112,14 +134,19 @@ public final class Store<State: Sendable, Action: Sendable>: Observable {
 
     let stateChanged = !isEqualIfEquatable(oldState, newState)
     let changed = trackedKeyPaths.values.filter { $0.hasChanged(oldState, newState) }
+    let nestedChanged = nestedKeyPaths.withLock { $0 }
+      .filter { $0.value(oldState, newState) }
+      .map { \Store[trackedPath: $0.key] }
 
     // withMutation を使わないのは、変わったキーパスが複数あり、
     // 全部の willSet → 代入 → 全部の didSet の順にしないと、通知を受けた側が途中の State を見るため。
     if stateChanged { registrar.willSet(self, keyPath: \.state) }
     for tracked in changed { tracked.willSet(self) }
+    for keyPath in nestedChanged { registrar.willSet(self, keyPath: keyPath) }
     currentState = newState
     if stateChanged { registrar.didSet(self, keyPath: \.state) }
     for tracked in changed { tracked.didSet(self) }
+    for keyPath in nestedChanged { registrar.didSet(self, keyPath: keyPath) }
   }
 
   private func trackedKeyPath<Value: Equatable>(
@@ -139,6 +166,35 @@ public final class Store<State: Sendable, Action: Sendable>: Observable {
     )
     trackedKeyPaths[keyPath] = tracked
     return tracked
+  }
+
+  /// TrackedState の値に、読み取りを Store に知らせる先を付けて返す。
+  private func trackedValue<Value: TrackedState>(at keyPath: KeyPath<State, Value> & Sendable)
+    -> Value
+  {
+    var value = currentState[keyPath: keyPath]
+    let registrar = registrar
+    let nestedKeyPaths = nestedKeyPaths
+    value._$tracking = StateTrackingContext(base: SendableKeyPath(keyPath)) {
+      [weak self] path in
+      guard let self else { return }
+      nestedKeyPaths.withLock { entries in
+        if entries[path] == nil {
+          entries[path] = {
+            isEqualIfEquatable($0[keyPath: path.keyPath], $1[keyPath: path.keyPath]) == false
+          }
+        }
+      }
+      // ObservationRegistrar は通知の単位を Store 上のキーパスで区別するため、
+      // State 上のキーパスを添字に持つキーパス（\Store[trackedPath:]）を使う。
+      registrar.access(self, keyPath: \Store[trackedPath: path])
+    }
+    return value
+  }
+
+  /// ネストしたキーパスの通知に使う、値を持たない添字。
+  nonisolated subscript(trackedPath path: SendableKeyPath) -> Int {
+    0
   }
 
   // キーパスの値の型（Value）を消して 1 つの辞書に入れるため、型ごとの処理をクロージャに閉じ込める。

@@ -1,0 +1,120 @@
+import InternalPrimitives
+import Observation
+import Redux
+import ReduxMacros
+import Testing
+
+@TrackedState
+struct Address: Sendable, Equatable {
+  var city: String = ""
+  var zip: String = ""
+}
+
+@TrackedState
+struct Profile: Sendable, Equatable {
+  var name: String = ""
+  var age: Int = 0
+  var address: Address = Address()
+  var tags: [String] = []
+
+  /// 計算プロパティは、中で読んだ保存プロパティが追跡される。
+  var isAdult: Bool { age >= 20 }
+}
+
+struct TrackedAppState: Sendable, Equatable {
+  var profile = Profile()
+  var count = 0
+}
+
+enum TrackedAppAction: Sendable {
+  case rename(String)
+  case birthday
+  case move(String)
+  case increment
+  case replaceProfile(Profile)
+}
+
+let trackedReducer = Reducer<TrackedAppState, TrackedAppAction> { state, action in
+  switch action {
+  case .rename(let name): state.profile.name = name
+  case .birthday: state.profile.age += 1
+  case .move(let city): state.profile.address.city = city
+  case .increment: state.count += 1
+  case .replaceProfile(let profile): state.profile = profile
+  }
+}
+
+@MainActor
+@Suite struct TrackedStateTests {
+  /// `read` の中で読んだ値について、各 Action の dispatch で通知されたかどうかを返す。
+  private func notifications(
+    reading read: @escaping @MainActor (Store<TrackedAppState, TrackedAppAction>) -> Void,
+    actions: [TrackedAppAction]
+  ) -> [Bool] {
+    let store = Store(initialState: TrackedAppState(), reducer: trackedReducer)
+    return actions.map { action in
+      let notified = Locked(false)
+      withObservationTracking {
+        read(store)
+      } onChange: {
+        notified.withLock { $0 = true }
+      }
+      store.dispatch(action)
+      return notified.withLock { $0 }
+    }
+  }
+
+  @Test func readingANestedPropertyNotifiesOnlyWhenThatPropertyChanges() {
+    let result = notifications(
+      reading: { _ = $0.profile.name },
+      actions: [.birthday, .move("Tokyo"), .increment, .rename("Ada")])
+    #expect(result == [false, false, false, true])
+  }
+
+  @Test func readingADeeplyNestedPropertyIsTrackedThroughNestedTrackedStates() {
+    let result = notifications(
+      reading: { _ = $0.profile.address.city },
+      actions: [.rename("Ada"), .move("Tokyo"), .move("Tokyo")])
+    #expect(result == [false, true, false])
+  }
+
+  @Test func readingAComputedPropertyTracksTheStoredPropertiesItReads() {
+    let result = notifications(
+      reading: { _ = $0.profile.isAdult },
+      actions: [.rename("Ada"), .birthday])
+    #expect(result == [false, true])
+  }
+
+  @Test func replacingTheWholeNestedValueNotifiesReadPropertiesThatChanged() {
+    var other = Profile()
+    other.name = "Grace"
+    let result = notifications(
+      reading: { _ = $0.profile.name },
+      actions: [.replaceProfile(Profile()), .replaceProfile(other)])
+    #expect(result == [false, true])
+  }
+
+  @Test func readingTheWholeStateStillTracksEverything() {
+    let result = notifications(reading: { _ = $0.state.profile.name }, actions: [.birthday])
+    #expect(result == [true])
+  }
+
+  @Test func trackedStateValuesKeepValueSemanticsAndEquality() {
+    var a = Profile()
+    a.name = "x"
+    let b = a
+    a.age = 3
+    #expect(b.age == 0)
+    var c = Profile()
+    c.name = "x"
+    #expect(b == c)
+    let store = Store(initialState: TrackedAppState(), reducer: trackedReducer)
+    #expect(store.profile == Profile())  // 読み取り元の情報は比較に影響しない
+  }
+
+  @Test func memberwiseInitializerStillWorks() {
+    let profile = Profile(name: "Ada", age: 36)
+    #expect(profile.name == "Ada")
+    #expect(profile.address == Address())
+  }
+}

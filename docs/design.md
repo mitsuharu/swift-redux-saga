@@ -272,7 +272,33 @@ dispatch の処理中に `dispatch` が呼ばれた場合（ミドルウェア�
 - `dispatch` で reducer を適用した後、表にあるキーパスについて新旧の値を比較し、変わったものだけ `willSet` / `didSet` を通知する。変わったキーパスがすべて `willSet` → 代入 → すべて `didSet` の順にする。
 - `store.state` を直接読んだ場合は `\Store.state` 全体の変更として通知する。State が `Equatable` なら、変化がないときは通知しない。
 - 値が `Equatable` でないプロパティを dynamic member で読んだ場合は、`\Store.state` 全体の変更として扱う。
-- 追跡の単位は Store から直接読んだプロパティ。`store.profile.name` は `profile` の変化で通知される（`name` 以外が変わっても通知される）。
+- 追跡の単位は Store から直接読んだプロパティ。`store.profile.name` は `profile` の変化で通知される（`name` 以外が変わっても通知される）。`Profile` に `@TrackedState` を付けると `name` 単位になる（下記）。
+
+#### ネストしたプロパティ単位の追跡（`@TrackedState`）
+
+State の中にネストした struct に `ReduxMacros` の `@TrackedState` を付けると、`store.profile.name` は `name` が変わったときだけ通知されます。
+
+```swift
+@TrackedState
+struct Profile: Sendable, Equatable {
+  var name: String = ""
+  var address: Address = Address()   // Address も @TrackedState なら、さらに中まで追跡する
+}
+```
+
+仕組み:
+
+- `store.profile`（値が `TrackedState`）は、値のコピーに「読み取り元」（`StateTrackingContext`：State からのキーパスと、Store に知らせる関数）を付けて返す。この時点では `profile` 全体を追跡に登録しない。
+- マクロは保存プロパティを、裏の保存プロパティ（`_name`）と、読み取りを知らせる計算プロパティに分ける（`init` アクセサで memberwise init はそのまま使える）。`name` を読むと `\State.profile.name` が Store に知らされ、Store はそのキーパスの新旧の値を比べて、変わったときだけ通知する。
+- 通知の単位には、State 上のキーパスを添字に持つ Store のキーパス（`\Store[trackedPath:]`）を使う。`ObservationRegistrar` は通知の単位を Store 上のキーパスで区別するため。
+- 読み取りは値のコピーから行われ、メインアクター外で起き得るため、ネストしたキーパスの表は `Locked` で守る。
+- 「読み取り元」は `Equatable` / `Hashable` で常に等しく扱い、値の比較に影響させない。Optional にしないのは、Optional だと「読み取り元の有無」が比較されてしまうため。
+
+制限:
+
+- 値全体を比較したり受け渡したりするだけでは追跡されない。読んだプロパティだけが追跡される（`store.state` を経由した読み取りは従来どおり State 全体を追跡する）。
+- 対象は型を書いた `var` の保存プロパティ。`let` は対象外（計算プロパティは中で読んだ保存プロパティが追跡される）。
+- `Codable` の自動準拠ではキーが `_name` になるので、`CodingKeys` を書く。
 
 比較のコストは「これまでに参照されたキーパスの種類数」に比例します。表の要素はコード中で使われるキーパスの種類数で頭打ちになるため、削除しません。
 

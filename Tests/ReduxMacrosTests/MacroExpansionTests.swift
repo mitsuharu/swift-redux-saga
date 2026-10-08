@@ -10,6 +10,10 @@
   private let actionCases = ["ActionCases": MacroSpec(type: ActionCasesMacro.self)]
   // @Slice が付ける @ActionCases は、ここでは展開せずに付いたことだけを確かめる。
   private let slice = ["Slice": MacroSpec(type: SliceMacro.self, conformances: ["Slice"])]
+  private let trackedState = [
+    "TrackedState": MacroSpec(type: TrackedStateMacro.self, conformances: ["TrackedState"]),
+    "TrackedProperty": MacroSpec(type: TrackedPropertyMacro.self),
+  ]
 
   /// マクロの展開結果を確かめ、違っていれば Swift Testing の Issue として記録する。
   private func expectExpansion(
@@ -175,6 +179,72 @@
           }
           """,
         macros: slice
+      )
+    }
+
+    @Test func trackedStateTurnsStoredPropertiesIntoTrackedOnes() {
+      expectExpansion(
+        """
+        @TrackedState
+        struct Profile {
+          var name: String = ""
+          let id: Int
+          var isEmpty: Bool { name.isEmpty }
+        }
+        """,
+        expandsTo: """
+          struct Profile {
+            var name: String {
+              @storageRestrictions(initializes: _name)
+              init(initialValue) {
+                _name = initialValue
+              }
+              get {
+                Redux.StateTrackingContext.read(_name, at: \\Self.name, in: _$tracking)
+              }
+              set {
+                _name = newValue
+              }
+            }
+
+            private var _name: String
+            let id: Int
+            var isEmpty: Bool { name.isEmpty }
+
+            var _$tracking = Redux.StateTrackingContext()
+          }
+
+          extension Profile: Redux.TrackedState {
+          }
+          """,
+        macros: trackedState
+      )
+    }
+
+    @Test func trackedPropertyWithoutATypeIsAnError() {
+      expectExpansion(
+        """
+        @TrackedState
+        struct Profile {
+          var name = ""
+        }
+        """,
+        expandsTo: """
+          struct Profile {
+            var name = ""
+
+            var _$tracking = Redux.StateTrackingContext()
+          }
+
+          extension Profile: Redux.TrackedState {
+          }
+          """,
+        diagnostics: [
+          DiagnosticSpec(
+            message: "A property of a @TrackedState struct needs an explicit type annotation.",
+            line: 3, column: 3)
+        ],
+        macros: trackedState
       )
     }
 

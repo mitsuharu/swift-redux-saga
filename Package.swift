@@ -64,6 +64,7 @@ let package = Package(
         "Redux",
         "Saga",
         "SagaTesting",
+        "InternalPrimitives",
         .product(name: "SwiftSyntaxMacrosGenericTestSupport", package: "swift-syntax"),
       ]
     ),

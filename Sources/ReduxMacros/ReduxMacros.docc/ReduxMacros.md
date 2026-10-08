@@ -24,3 +24,5 @@ ctx.takeEvery(.case(\.add)) { ctx, value in ... }
 
 - ``ActionCases()``
 - ``Slice()``
+- ``TrackedState()``
+- ``TrackedProperty()``
