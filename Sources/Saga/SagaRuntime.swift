@@ -101,6 +101,17 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
     return task
   }
 
+  /// すべての Saga が Effect（`take` / `join` / `delay` など）で止まるまで待ちます。
+  ///
+  /// Saga は ``run(_:)`` から非同期に動き出すため、起動直後に emit した Action は、まだ `take` で
+  /// 待ち始めていない Saga には届きません。起動直後の Action を確実に届けたい場合は、先にこのメソッドで待つか、
+  /// その処理を Saga の中に書いてください。
+  ///
+  /// `call` で呼んだ関数が終わらない場合は、このメソッドも戻りません。
+  public func waitUntilIdle() async {
+    await activity.waitUntilIdle()
+  }
+
   /// 起動したすべての Saga をキャンセルします。以降に ``run(_:)`` した Saga はすぐにキャンセルされます。
   public func stop() {
     let tasks = rootTasks.withLock { rootTasks -> Set<SagaTask> in
