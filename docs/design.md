@@ -432,6 +432,55 @@ extension Store {
 - iOS 26 以降でも `Observations` を使わず、同じ実装を使う。OS によって通知のタイミングが変わらないようにするため。iOS 26 以降のアプリは `Observations { store.count }` を直接使ってもよい（Store は `Observable` なので、そのまま動く）。
 - 購読は Store とトークンを弱参照で持ち、Store や呼び出し元を延命しない。
 
+### 5.10 入力欄の Binding（BindableState / BindingAction）
+
+`TextField` や `Toggle` など、ユーザーが値を直接変える UI 部品のために、値を書き戻すだけの Action と reducer を部品ごとに書かなくて済むようにします。
+
+```swift
+@propertyWrapper public struct BindableState<Value> { public var wrappedValue: Value; public var projectedValue: Self }
+
+public struct BindingAction<State: Sendable>: Sendable, Equatable {
+  public static func set<Value: Equatable & Sendable>(
+    _ keyPath: WritableKeyPath<State, BindableState<Value>> & Sendable, _ value: Value) -> Self
+  public func apply(to state: inout State)
+  public func value<Value>(for keyPath: WritableKeyPath<State, BindableState<Value>> & Sendable) -> Value?
+}
+
+public protocol BindableAction: Sendable {
+  associatedtype State: Sendable
+  static func binding(_ action: BindingAction<State>) -> Self   // case binding(BindingAction<State>) で満たす
+  var binding: BindingAction<State>? { get }                    // @ActionCases が生成する
+}
+
+extension Reducer where Action: BindableAction, Action.State == State {
+  public static var binding: Reducer   // BindingAction を適用する
+}
+// ReduxSwiftUI
+extension Store where Action: BindableAction, Action.State == State {
+  public func binding<Value: Equatable & Sendable>(_ keyPath: WritableKeyPath<State, BindableState<Value>> & Sendable) -> Binding<Value>
+}
+// ReduxSaga（Saga は Redux に依存しないため、Redux の型を使うパターンはここに置く）
+extension ActionPattern where Action: BindableAction {
+  public static func binding(_ keyPath: WritableKeyPath<Action.State, BindableState<Value>> & Sendable) -> Self
+}
+```
+
+```swift
+struct State: Sendable, Equatable {
+  @BindableState var draft = ""   // 入力欄から書き換えてよいプロパティに印を付ける
+  var todos: [Todo] = []          // 印のないプロパティは BindingAction で書き換えられない
+}
+enum Action: Sendable, BindableAction {
+  case binding(BindingAction<State>)
+  case addTapped
+}
+TextField("New ToDo", text: store.binding(\.$draft))
+ctx.debounce(.milliseconds(300), .binding(\.$query)) { ctx, query in ... }
+```
+
+- マクロではなくプロパティラッパーにしたのは、書き換えてよいプロパティを型で区別でき、マクロなしでも使えるため。`var binding` は `@ActionCases`（`@Slice` の Action には自動で付く）が生成し、マクロを使わない場合は手書きする。
+- 書き換えてよいプロパティを印で限定するのは、View から任意の State を書き換えられると、reducer を通さない変更が増えて追いにくくなるため。
+
 ---
 
 ## 6. Saga

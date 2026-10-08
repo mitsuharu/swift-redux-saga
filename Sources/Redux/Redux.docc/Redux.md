@@ -32,6 +32,12 @@ print(store.count)
 - ``MiddlewareAPI``
 - ``MiddlewareBuilder``
 
+### 入力欄の Binding
+
+- ``BindableState``
+- ``BindingAction``
+- ``BindableAction``
+
 ### Redux Toolkit 相当
 
 - ``Selector``

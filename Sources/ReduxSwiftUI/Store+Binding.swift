@@ -26,6 +26,26 @@
     }
   }
 
+  extension Store where Action: BindableAction, Action.State == State {
+    /// `BindableState` を付けたプロパティの `Binding` を作ります。
+    ///
+    /// 値を変えると `BindingAction` を包んだ Action（`.binding(.set(...))`）を dispatch します。
+    /// 入力欄ごとに Action を用意する必要はありません。
+    ///
+    /// ```swift
+    /// TextField("New ToDo", text: store.binding(\.$draft))
+    /// Toggle("Notifications", isOn: store.binding(\.$isNotificationOn))
+    /// ```
+    public func binding<Value: Equatable & Sendable>(
+      _ keyPath: WritableKeyPath<State, BindableState<Value>> & Sendable
+    ) -> Binding<Value> {
+      Binding(
+        get: { self[dynamicMember: keyPath].wrappedValue },
+        set: { self.dispatch(.binding(.set(keyPath, $0))) }
+      )
+    }
+  }
+
   extension View {
     /// Store を Environment に入れます。子の View では `@Environment(Store<AppState, AppAction>.self)` で取り出せます。
     ///

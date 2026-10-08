@@ -94,3 +94,31 @@ let appReducer = Reducer<AppState, AppAction> {
     try await tester.finish()
   }
 }
+
+// @Slice の中の Action には @ActionCases が付き、`var binding` が生成されるので、
+// case binding を書くだけで BindableAction に準拠できる。
+@Slice
+enum Settings {
+  struct State: Sendable, Equatable {
+    @BindableState var nickname = ""
+  }
+
+  enum Action: Sendable, Equatable, BindableAction {
+    case binding(BindingAction<State>)
+  }
+
+  static func reduce(into state: inout State, action: Action) {
+    switch action {
+    case .binding(let binding): binding.apply(to: &state)
+    }
+  }
+}
+
+@Suite struct BindableActionMacroTests {
+  @Test func actionCasesSatisfiesBindableAction() {
+    var state = Settings.initialState
+    Settings.reducer.reduce(into: &state, action: .binding(.set(\.$nickname, "ada")))
+    #expect(state.nickname == "ada")
+    #expect(Settings.Action.binding(.set(\.$nickname, "x")).binding == .set(\.$nickname, "x"))
+  }
+}

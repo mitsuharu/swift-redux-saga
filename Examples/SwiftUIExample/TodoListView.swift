@@ -12,7 +12,7 @@ struct TodoListView: View {
       List {
         Section {
           HStack {
-            TextField("New ToDo", text: store.binding(\.draft, send: { .draftChanged($0) }))
+            TextField("New ToDo", text: store.binding(\.$draft))
               .onSubmit { store.dispatch(.addTapped) }
               .accessibilityIdentifier("draftField")
             Button("Add") { store.dispatch(.addTapped) }
@@ -39,7 +39,7 @@ struct TodoListView: View {
         }
       }
       .navigationTitle("ToDo")
-      .searchable(text: store.binding(\.query, send: { .queryChanged($0) }))
+      .searchable(text: store.binding(\.$query))
       .refreshable { store.dispatch(.refresh) }
       .alert(
         "Error",
