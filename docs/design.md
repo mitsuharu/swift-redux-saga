@@ -440,6 +440,31 @@ public protocol SagaHost<State, Action>: Sendable {
 
 Action の流れ込み（Host → Saga）は、Host 側が `SagaRuntime.emit(_:)` を呼ぶことで行います。これにより、ReSwift 用や他の状態管理用のアダプタも、このプロトコルを実装して `emit` を呼ぶだけで作れます。
 
+```swift
+public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
+  public init<Host: SagaHost>(host: Host, clock: any Clock<Duration> = ContinuousClock())
+    where Host.State == State, Host.Action == Action
+  /// Host が処理した Action を、その時点で待っている Saga に届ける。
+  public func emit(_ action: Action)
+  /// Saga を起動する（Saga の木の根）。
+  @discardableResult public func run(_ saga: Saga<State, Action>) -> SagaTask
+  /// 起動したすべての Saga をキャンセルする。以降に run した Saga はすぐにキャンセルされる。
+  public func stop()
+}
+
+public struct SagaTask: Sendable, Hashable {
+  public var isRunning: Bool { get }
+  public var isCancelled: Bool { get }
+  public func cancel()
+  /// Saga の外から待つ。Saga の中では `ctx.join(task)` を使う。
+  public func join() async throws
+}
+```
+
+- `run` だけは非構造化の `Task` で根を作る（親になるタスクが存在しないため）。根より下はすべてタスクグループの子タスク。
+- キャンセルを受けた Saga が `CancellationError` を catch して正常に終わっても、キャンセルとして扱う（redux-saga と同じ）。
+- `join` を Saga の中用（`ctx.join`）と外用（`SagaTask.join`）に分けるのは、テスト支援のために「Saga が Effect で止まっているか」を数えており（9 章）、外から待つ側を数えないため。
+
 ### 6.3 Saga と SagaContext
 
 Saga は「コンテキストを受け取る async 関数」です。旧実装のように Action を引数に取りません。
@@ -604,7 +629,7 @@ extension ActionPattern where Value == Action, Action: Equatable {
 | `fork` | `func fork(_ body: ...) -> SagaTask` | attached。親のキャンセルが伝播し、子のエラーは親に伝播する |
 | `spawn` | `func spawn(_ body: ...) -> SagaTask` | detached。ランタイム停止時のみキャンセルされる |
 | `cancel` | `SagaTask.cancel()` | |
-| `join` | `SagaTask.join() async throws` | |
+| `join` | `ctx.join(_ task: SagaTask) async throws` | Saga の外からは `SagaTask.join()` |
 | `cancelled` | `ctx.isCancelled` / `Task.isCancelled` | |
 | `delay` | `func delay(_ duration: Duration) async throws` | ランタイムに注入した `Clock` を使う |
 | `takeEvery` | `func takeEvery<V>(_ p, _ worker) -> SagaTask` | 非ブロッキング（内部で fork） |
@@ -622,7 +647,8 @@ extension ActionPattern where Value == Action, Action: Equatable {
 ### 6.6 fork / spawn の実装方針（構造化並行性）
 
 - 各 Saga は「スコープ」を持つ。スコープは `withThrowingDiscardingTaskGroup` を開き、Saga 本体と fork された子をすべてそのグループの子タスクとして実行する。
-- `fork` は同期関数。スコープが持つ要求キュー（`AsyncStream`）に子の起動要求を積み、グループ側のループがそれを `addTask` する。したがって子は親タスクの本物の子タスクであり、親のキャンセルは自動で伝播する。
+- `fork` は同期関数。スコープが持つ要求キュー（`ForkQueue`）に子の起動要求を積み、グループ側のループがそれを `addTask` する。したがって子は親タスクの本物の子タスクであり、親のキャンセルは自動で伝播する。
+  - キューに `AsyncStream` を使わないのは、親がキャンセルされると iteration が終わり、積まれた要求が起動されずに残る（join した側が永久に待つ）ため。`ForkQueue` はキャンセルされても閉じられるまで要求を渡す。
 - 親（Saga 本体）は、本体が終わってもすべての子が終わるまで完了しない（redux-saga と同じ）。
 - 子が未処理のエラーで終わるとグループが失敗し、兄弟と親がキャンセルされ、エラーが親に伝播する。
 - 個々の子を `SagaTask.cancel()` で止めるため、子は自分用のキャンセル信号を持ち、信号を受けたら自身の内側のタスクグループをキャンセルする。

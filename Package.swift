@@ -32,7 +32,7 @@ let package = Package(
 
     .testTarget(name: "InternalPrimitivesTests", dependencies: ["InternalPrimitives"]),
     .testTarget(name: "ReduxTests", dependencies: ["Redux"]),
-    .testTarget(name: "SagaTests", dependencies: ["Saga", "SagaTesting"]),
+    .testTarget(name: "SagaTests", dependencies: ["Saga", "SagaTesting", "InternalPrimitives"]),
     .testTarget(name: "ReduxSagaTests", dependencies: ["ReduxSaga", "SagaTesting"]),
     .testTarget(name: "ReduxSwiftUITests", dependencies: ["ReduxSwiftUI"]),
     .testTarget(name: "ReduxUIKitTests", dependencies: ["ReduxUIKit"]),
