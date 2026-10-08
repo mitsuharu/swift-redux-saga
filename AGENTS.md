@@ -81,6 +81,7 @@
 
 - SHA は推測で書かず、公式リポジトリのリリースタグから確認する（例: `gh api repos/actions/checkout/git/ref/tags/v7.0.1`。注釈付きタグの場合は指すコミットまでたどる）。
 - アクションを更新するときは SHA とコメントのバージョンを同時に更新する。
+- アクションの更新は Dependabot（`.github/dependabot.yml`、月 1 回）に任せる。Dependabot は SHA とバージョンのコメントを合わせて更新する。
 - runner イメージと Xcode のバージョンも推測で書かず、[actions/runner-images](https://github.com/actions/runner-images) の公開情報で確認する。
 
 ## よく使うコマンド
