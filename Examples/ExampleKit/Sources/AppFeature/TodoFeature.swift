@@ -1,10 +1,14 @@
 import Domain
 import Foundation
 import Redux
+import ReduxMacros
 import Saga
 
 /// ToDo 画面の State・Action・reducer。
-public enum TodoFeature: Slice {
+///
+/// `@Slice` が Slice への準拠を加え、`Action` に `@ActionCases` を付ける（case ごとのプロパティが生成される）。
+@Slice
+public enum TodoFeature {
   public struct State: Sendable, Equatable {
     public var todos = EntityState<Todo.ID, Todo>()
     public var isLoading = false
@@ -104,14 +108,14 @@ public struct TodoSagas: Sendable {
         }
       }
       // 入力が止まってから検索語を反映する。
-      ctx.debounce(.milliseconds(300), Self.queryChanges) { ctx, query in
+      ctx.debounce(.milliseconds(300), .case(\.queryChanged)) { ctx, query in
         await ctx.put(.queryApplied(query))
       }
-      ctx.takeEvery(Self.toggleRequests) { ctx, id in
+      ctx.takeEvery(.case(\.toggleTapped)) { ctx, id in
         guard let todo = await ctx.select({ $0.todos.entities[id] }) else { return }
         await perform(ctx) { .updated(try await ctx.call(useCase.toggle, todo)) }
       }
-      ctx.takeEvery(Self.deleteRequests) { ctx, id in
+      ctx.takeEvery(.case(\.deleteTapped)) { ctx, id in
         await perform(ctx) {
           try await ctx.call(useCase.delete, id)
           return .deleted(id)
@@ -123,16 +127,6 @@ public struct TodoSagas: Sendable {
       // （設計書 7 章「起動直後の Action」）。ヘルパーは呼び出した時点で購読を始めているので、ここで put すれば届く。
       await ctx.put(.refresh)
     }
-  }
-
-  static let queryChanges = ActionPattern<TodoFeature.Action, String>.case {
-    if case .queryChanged(let query) = $0 { query } else { nil }
-  }
-  static let toggleRequests = ActionPattern<TodoFeature.Action, Todo.ID>.case {
-    if case .toggleTapped(let id) = $0 { id } else { nil }
-  }
-  static let deleteRequests = ActionPattern<TodoFeature.Action, Todo.ID>.case {
-    if case .deleteTapped(let id) = $0 { id } else { nil }
   }
 
   /// 処理の結果を put し、失敗したらエラーの Action を put する。
