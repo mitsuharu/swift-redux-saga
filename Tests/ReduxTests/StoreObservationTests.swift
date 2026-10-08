@@ -1,3 +1,4 @@
+import Observation
 import Redux
 import Testing
 
@@ -120,5 +121,38 @@ private let reducer = Reducer<AppState, Action> { state, action in
     store = nil
     #expect(weakStore == nil)
     token?.cancel()
+  }
+}
+
+@MainActor
+@Observable
+private final class CounterViewModel {
+  let store: Store<AppState, Action>
+  var label = "count"
+
+  init(store: Store<AppState, Action>) {
+    self.store = store
+  }
+
+  var text: String { "\(label): \(store.count)" }
+}
+
+@MainActor
+@Suite struct ObservationTokenObserveTests {
+  @Test func observeFollowsBothTheViewModelAndTheStore() async {
+    let viewModel = CounterViewModel(store: Store(initialState: AppState(), reducer: reducer))
+    let (changes, continuation) = AsyncStream.makeStream(of: String.self)
+    let token = ObservationToken.observe { [weak viewModel] in
+      viewModel?.text ?? ""
+    } onChange: {
+      continuation.yield($0)
+    }
+    var iterator = changes.makeAsyncIterator()
+    #expect(await iterator.next() == "count: 0")
+    viewModel.store.dispatch(.increment)
+    #expect(await iterator.next() == "count: 1")
+    viewModel.label = "total"
+    #expect(await iterator.next() == "total: 1")
+    token.cancel()
   }
 }

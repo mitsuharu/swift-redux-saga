@@ -469,6 +469,9 @@ extension Store {
 
 @MainActor public final class ObservationToken {
   public func cancel()
+  /// Store 以外（MVVM の ViewModel など）の Observable な値も同じ仕組みで購読する。
+  public static func observe<Value>(_ read: @escaping @MainActor () -> Value,
+                                    onChange: @escaping @MainActor (Value) -> Void) -> ObservationToken
 }
 ```
 
@@ -1024,12 +1027,13 @@ App          View と Store の組み立て（依存の注入）
 Examples/
 ├── ExampleKit/          ローカルパッケージ
 │   ├── Domain           Todo / TodoRepository / TodoUseCase（本ライブラリに依存しない）
-│   └── AppFeature       TodoFeature（Slice）/ TodoSagas / AppStore（組み立て）
+│   └── AppFeature       TodoFeature（Slice）/ TodoSagas / AppStore（組み立て・永続化）/ TodoListViewModel（MVVM）
 ├── SwiftUIExample/      SwiftUI アプリ
 ├── UIKitExample/        UIKit アプリ（iOS 17 から動くよう observe を使う）
 └── Examples.xcodeproj   両アプリ（default MainActor isolation を有効にしている）
 ```
 
+- MVVM と併用する。画面特有の状態（入力中の文字列など）は ViewModel（`@Observable`）に持たせ、複数の画面で使うデータと Saga が関わる処理、永続化する設定は Store に置く。ViewModel は Store を読む計算プロパティを公開し、Observation がそのまま連鎖する。View / ViewController は ViewModel だけを見る。UIKit では `ObservationToken.observe` で ViewModel を購読する。
 - Xcode プロジェクトはフォルダ同期（`PBXFileSystemSynchronizedRootGroup`）を使い、ソースの追加でプロジェクトファイルを編集しなくて済むようにする。
 - シミュレータや実機での動作確認には [callstack/agent-device](https://github.com/callstack/agent-device) を使う。
 

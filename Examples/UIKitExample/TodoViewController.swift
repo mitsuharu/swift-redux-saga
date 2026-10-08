@@ -4,17 +4,22 @@ import Redux
 import ReduxUIKit
 import UIKit
 
+/// ViewController は ViewModel だけを見る。Store や Action は ViewModel が扱う。
 final class TodoViewController: UIViewController {
   private typealias DataSource = UITableViewDiffableDataSource<Int, Todo.ID>
 
-  private let store: Store<TodoFeature.State, TodoFeature.Action>
+  private let viewModel: TodoListViewModel
   private let tableView = UITableView(frame: .zero, style: .insetGrouped)
   private let draftField = UITextField()
+  private let addButton = UIButton(configuration: .filled())
+  private let showsCompletedSwitch = UISwitch()
   private let activityIndicator = UIActivityIndicatorView(style: .medium)
   private var dataSource: DataSource?
+  /// 表示中の ToDo（セルの内容を作るため）。
+  private var todos: [Todo.ID: Todo] = [:]
 
-  init(store: Store<TodoFeature.State, TodoFeature.Action>) {
-    self.store = store
+  init(viewModel: TodoListViewModel) {
+    self.viewModel = viewModel
     super.init(nibName: nil, bundle: nil)
   }
 
@@ -30,7 +35,7 @@ final class TodoViewController: UIViewController {
     navigationItem.rightBarButtonItem = UIBarButtonItem(customView: activityIndicator)
     setUpInput()
     setUpTable()
-    observeStore()
+    observeViewModel()
   }
 
   private func setUpInput() {
@@ -39,16 +44,32 @@ final class TodoViewController: UIViewController {
     draftField.accessibilityIdentifier = "draftField"
     draftField.addAction(
       UIAction { [weak self] action in
-        guard let self, let field = action.sender as? UITextField else { return }
-        store.dispatch(.binding(.set(\.$draft, field.text ?? "")))
+        guard let field = action.sender as? UITextField else { return }
+        self?.viewModel.draft = field.text ?? ""
       },
       for: .editingChanged)
 
-    let addButton = UIButton(
-      configuration: .filled(), primaryAction: store.action(.addTapped, title: "Add"))
+    addButton.setTitle("Add", for: .normal)
     addButton.accessibilityIdentifier = "addButton"
+    addButton.addAction(
+      UIAction { [weak self] _ in self?.viewModel.add() }, for: .primaryActionTriggered)
 
-    let stack = UIStackView(arrangedSubviews: [draftField, addButton])
+    let showsCompletedLabel = UILabel()
+    showsCompletedLabel.text = "Show completed"
+    showsCompletedSwitch.accessibilityIdentifier = "showsCompletedToggle"
+    showsCompletedSwitch.addAction(
+      UIAction { [weak self] action in
+        guard let toggle = action.sender as? UISwitch else { return }
+        self?.viewModel.showsCompleted = toggle.isOn
+      },
+      for: .valueChanged)
+
+    let inputRow = UIStackView(arrangedSubviews: [draftField, addButton])
+    inputRow.spacing = 8
+    let optionRow = UIStackView(arrangedSubviews: [showsCompletedLabel, showsCompletedSwitch])
+    optionRow.spacing = 8
+    let stack = UIStackView(arrangedSubviews: [inputRow, optionRow])
+    stack.axis = .vertical
     stack.spacing = 8
     stack.translatesAutoresizingMaskIntoConstraints = false
     view.addSubview(stack)
@@ -73,7 +94,7 @@ final class TodoViewController: UIViewController {
     tableView.delegate = self
     dataSource = DataSource(tableView: tableView) { [weak self] tableView, indexPath, id in
       let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
-      guard let todo = self?.store.todos.entities[id] else { return cell }
+      guard let todo = self?.todos[id] else { return cell }
       var content = cell.defaultContentConfiguration()
       content.text = todo.title
       content.image = UIImage(systemName: todo.isDone ? "checkmark.circle.fill" : "circle")
@@ -84,28 +105,40 @@ final class TodoViewController: UIViewController {
     let refreshControl = UIRefreshControl()
     refreshControl.addAction(
       UIAction { [weak self] _ in
-        self?.store.dispatch(.refresh)
+        self?.viewModel.refresh()
         refreshControl.endRefreshing()
       },
       for: .valueChanged)
     tableView.refreshControl = refreshControl
   }
 
-  /// OS に依存しない購読 API で State の変化を画面に反映する。
+  /// ViewModel の変化を画面に反映する（iOS 17 から動く購読 API）。
   ///
-  /// iOS 26 以降だけを対象にするなら、`updateProperties()` の中で `store.todos` などを読むだけで
+  /// iOS 26 以降だけを対象にするなら、`updateProperties()` の中で `viewModel.todos` などを読むだけで
   /// UIKit が自動で追跡するため、この購読は不要になる。
-  private func observeStore() {
-    store.observe {
-      $0.todos
-    } onChange: { [weak self] _ in
-      self?.applySnapshot()
+  private func observeViewModel() {
+    ObservationToken.observe { [weak viewModel] in
+      viewModel?.todos ?? []
+    } onChange: {
+      [weak self] todos in
+      self?.apply(todos)
     }
     .retained(by: self)
 
-    store.observe {
-      $0.isLoading
-    } onChange: { [weak self] isLoading in
+    ObservationToken.observe { [weak viewModel] in
+      (viewModel?.draft ?? "", viewModel?.canAdd ?? false, viewModel?.showsCompleted ?? true)
+    } onChange: { [weak self] draft, canAdd, showsCompleted in
+      guard let self else { return }
+      if draftField.text != draft { draftField.text = draft }
+      addButton.isEnabled = canAdd
+      showsCompletedSwitch.isOn = showsCompleted
+    }
+    .retained(by: self)
+
+    ObservationToken.observe { [weak viewModel] in
+      viewModel?.isLoading ?? false
+    } onChange: {
+      [weak self] isLoading in
       if isLoading {
         self?.activityIndicator.startAnimating()
       } else {
@@ -114,31 +147,26 @@ final class TodoViewController: UIViewController {
     }
     .retained(by: self)
 
-    store.observe {
-      $0.draft
-    } onChange: { [weak self] draft in
-      if self?.draftField.text != draft { self?.draftField.text = draft }
-    }
-    .retained(by: self)
-
-    store.observe {
-      $0.errorMessage
-    } onChange: { [weak self] message in
+    ObservationToken.observe { [weak viewModel] in
+      viewModel?.errorMessage
+    } onChange: {
+      [weak self] message in
       guard let self, let message else { return }
       let alert = UIAlertController(title: "Error", message: message, preferredStyle: .alert)
       alert.addAction(
         UIAlertAction(title: "OK", style: .default) { [weak self] _ in
-          self?.store.dispatch(.errorDismissed)
+          self?.viewModel.dismissError()
         })
       present(alert, animated: true)
     }
     .retained(by: self)
   }
 
-  private func applySnapshot() {
+  private func apply(_ todos: [Todo]) {
+    self.todos = Dictionary(uniqueKeysWithValues: todos.map { ($0.id, $0) })
     var snapshot = NSDiffableDataSourceSnapshot<Int, Todo.ID>()
     snapshot.appendSections([0])
-    snapshot.appendItems(TodoFeature.visibleTodos(store.state).map(\.id))
+    snapshot.appendItems(todos.map(\.id))
     // 完了の切り替えなど、同じ ID の中身が変わった場合も描き直す。
     snapshot.reconfigureItems(snapshot.itemIdentifiers)
     dataSource?.apply(snapshot, animatingDifferences: true)
@@ -149,7 +177,7 @@ extension TodoViewController: UITableViewDelegate {
   func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
     tableView.deselectRow(at: indexPath, animated: true)
     guard let id = dataSource?.itemIdentifier(for: indexPath) else { return }
-    store.dispatch(.toggleTapped(id))
+    viewModel.toggle(id)
   }
 
   func tableView(
@@ -158,7 +186,7 @@ extension TodoViewController: UITableViewDelegate {
     guard let id = dataSource?.itemIdentifier(for: indexPath) else { return nil }
     let delete = UIContextualAction(style: .destructive, title: "Delete") {
       [weak self] _, _, completion in
-      self?.store.dispatch(.deleteTapped(id))
+      self?.viewModel.delete(id)
       completion(true)
     }
     return UISwipeActionsConfiguration(actions: [delete])

@@ -4,7 +4,10 @@ import Redux
 import ReduxMacros
 import Saga
 
-/// ToDo 画面の State・Action・reducer。
+/// ToDo の State・Action・reducer。
+///
+/// Store に置くのは、複数の画面で使うデータ（ToDo の一覧、読み込み中、エラー）と、Saga が関わる処理（検索）、
+/// 永続化する設定。入力中の文字列のような画面特有の状態は ViewModel（`TodoListViewModel`）に持たせる。
 ///
 /// `@Slice` が Slice への準拠を加え、`Action` に `@ActionCases` を付ける（case ごとのプロパティが生成される）。
 @Slice
@@ -12,8 +15,8 @@ public enum TodoFeature {
   public struct State: Sendable, Equatable {
     public var todos = EntityState<Todo.ID, Todo>()
     public var isLoading = false
-    /// 新しい ToDo の入力欄。入力欄から直接書き換える（BindingAction）。
-    @BindableState public var draft = ""
+    /// 永続化する設定。
+    public var preferences = Preferences()
     /// 検索欄に入力中の文字列。入力欄から直接書き換える（BindingAction）。
     @BindableState public var query = ""
     /// 入力が止まってから反映した検索語（Saga の debounce で更新する）。
@@ -23,17 +26,29 @@ public enum TodoFeature {
     public init() {}
   }
 
+  /// 永続化する設定（`ReduxPersistence` で保存する）。
+  public struct Preferences: Sendable, Equatable, Codable {
+    /// 完了済みの ToDo を表示するか。
+    public var showsCompleted = true
+
+    public init(showsCompleted: Bool = true) {
+      self.showsCompleted = showsCompleted
+    }
+  }
+
   public enum Action: Sendable, Equatable, BindableAction {
-    /// 入力欄（draft / query）の書き換え。`store.binding(\.$draft)` が送る。
+    /// 入力欄（query）の書き換え。`store.binding(\.$query)` が送る。
     case binding(BindingAction<State>)
 
     // View から送る Action
     /// 一覧を読み込み直す（引っぱって更新など）。起動時は Saga が自分で送る。
     case refresh
-    case addTapped
+    /// タイトルから ToDo を追加する（入力中の文字列は ViewModel が持つ）。
+    case add(title: String)
     case toggleTapped(Todo.ID)
     case deleteTapped(Todo.ID)
     case errorDismissed
+    case setShowsCompleted(Bool)
 
     // Saga が送る Action
     case queryApplied(String)
@@ -54,8 +69,10 @@ public enum TodoFeature {
       state.isLoading = true
     case .binding(let binding):
       binding.apply(to: &state)
-    case .addTapped, .toggleTapped, .deleteTapped:
+    case .add, .toggleTapped, .deleteTapped:
       break
+    case .setShowsCompleted(let showsCompleted):
+      state.preferences.showsCompleted = showsCompleted
     case .queryApplied(let query):
       state.appliedQuery = query
     case .errorDismissed:
@@ -64,7 +81,6 @@ public enum TodoFeature {
       state.isLoading = false
       adapter.setAll(todos, in: &state.todos)
     case .added(let todo):
-      state.draft = ""
       adapter.setOne(todo, in: &state.todos)
     case .updated(let todo):
       adapter.setOne(todo, in: &state.todos)
@@ -76,11 +92,14 @@ public enum TodoFeature {
     }
   }
 
-  /// 検索語で絞り込んだ ToDo。検索語か ToDo が変わらない限り再計算しない。
-  public static let visibleTodos = createSelector(\State.todos, \.appliedQuery) { todos, query in
-    let all = adapter.all(in: todos)
-    guard !query.isEmpty else { return all }
-    return all.filter { $0.title.localizedCaseInsensitiveContains(query) }
+  /// 検索語と設定で絞り込んだ ToDo。入力が変わらない限り再計算しない。
+  public static let visibleTodos = createSelector(
+    \State.todos, \.appliedQuery, \.preferences.showsCompleted
+  ) { todos, query, showsCompleted in
+    adapter.all(in: todos).filter { todo in
+      (showsCompleted || !todo.isDone)
+        && (query.isEmpty || todo.title.localizedCaseInsensitiveContains(query))
+    }
   }
 }
 
@@ -100,8 +119,7 @@ public struct TodoSagas: Sendable {
         await perform(ctx) { .loaded(try await ctx.call(useCase.load)) }
       }
       // 二重送信を防ぐため、追加の処理中に届いた addTapped は無視する。
-      ctx.takeLeading(.action(.addTapped)) { ctx, _ in
-        let title = await ctx.select { $0.draft }
+      ctx.takeLeading(.case(\.add)) { ctx, title in
         await perform(ctx) {
           guard let todo = try await ctx.call(useCase.add, title) else { return nil }
           return .added(todo)
