@@ -378,26 +378,31 @@ let visibleTodos = createSelector(\AppState.todos, \.filter) { todos, filter in 
 public struct EntityState<ID: Hashable & Sendable, Entity: Sendable>: Sendable {
   public var ids: [ID]
   public var entities: [ID: Entity]
+  public init()
 }
+extension EntityState: Equatable where Entity: Equatable {}
 
 public struct EntityAdapter<ID: Hashable & Sendable, Entity: Sendable>: Sendable {
-  public init(id: KeyPath<Entity, ID> & Sendable, sort: (@Sendable (Entity, Entity) -> Bool)? = nil)
+  public init(id: @escaping @Sendable (Entity) -> ID, sortedBy: (@Sendable (Entity, Entity) -> Bool)? = nil)
 
-  public func addOne(_ entity: Entity, to state: inout EntityState<ID, Entity>)
-  public func addMany(_ entities: some Sequence<Entity>, to state: inout EntityState<ID, Entity>)
-  public func setOne / setMany / setAll
-  public func upsertOne / upsertMany
-  public func updateOne(id: ID, in state: inout EntityState<ID, Entity>, _ update: (inout Entity) -> Void)
-  public func removeOne / removeMany / removeAll
+  public func addOne(_:to:) / addMany(_:to:)        // 同じ ID があれば追加しない
+  public func setOne(_:in:) / setMany(_:in:)        // 追加か置き換え（RTK の setOne / upsertOne）
+  public func setAll(_:in:)
+  public func updateOne(_ id:in:_ update: (inout Entity) -> Void) / updateMany(...)
+  public func removeOne(_:from:) / removeMany(_:from:) / removeAll(from:)
 
-  public func selectAll(_ state: EntityState<ID, Entity>) -> [Entity]
-  public func selectByID(_ id: ID, in state: EntityState<ID, Entity>) -> Entity?
+  public func all(in:) -> [Entity]
+  public func entity(_ id:in:) -> Entity?
+  public func count(in:) -> Int
 }
 
 extension EntityAdapter where Entity: Identifiable, ID == Entity.ID {
-  public init(sort: ...)
+  public init(sortedBy: ...)
 }
 ```
+
+- RTK の `upsertOne` は部分的な更新をマージするが、Swift には部分型がないため、置き換え（`setOne`）と、クロージャで書き換える `updateOne` に分ける。
+- 並び順を指定した場合は、変更のたびに `ids` を並べ直す。
 
 ### 5.9 OS に依存しない購読 API
 
