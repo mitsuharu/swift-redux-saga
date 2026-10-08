@@ -90,5 +90,5 @@
 
 | # | ブランチ | 内容 |
 | --- | --- | --- |
-| 10-1 | `feature/binding-action` | 入力欄の Binding（`BindableState` / `BindingAction` / `BindableAction`） |
+| 10-1 | `feature/binding-action` | 入力欄の Binding（`BindableState` / `BindingAction` / `BindableAction`） （[#35](https://github.com/mitsuharu/swift-redux-saga/pull/35)） |
 | 10-2 | `feature/nested-observation` | ネストしたプロパティ単位の Observation 追跡（マクロ） |
