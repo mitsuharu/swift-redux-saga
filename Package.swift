@@ -31,7 +31,7 @@ let package = Package(
     .target(name: "ReduxTesting", dependencies: ["Redux"]),
 
     .testTarget(name: "InternalPrimitivesTests", dependencies: ["InternalPrimitives"]),
-    .testTarget(name: "ReduxTests", dependencies: ["Redux"]),
+    .testTarget(name: "ReduxTests", dependencies: ["Redux", "InternalPrimitives"]),
     .testTarget(name: "SagaTests", dependencies: ["Saga", "SagaTesting", "InternalPrimitives"]),
     .testTarget(name: "ReduxSagaTests", dependencies: ["ReduxSaga", "SagaTesting"]),
     .testTarget(name: "ReduxSwiftUITests", dependencies: ["ReduxSwiftUI"]),
