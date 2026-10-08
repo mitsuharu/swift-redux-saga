@@ -5,7 +5,7 @@
 #   - macOS:  SwiftPM でのビルドとテスト
 #   - iOS:    xcodebuild で iOS シミュレータ向けのビルドとテスト
 #   - Linux:  UI に依存しないターゲットのビルドとテスト
-#   - Examples: サンプルアプリのロジック（Examples/ExampleKit）のビルドとテスト
+#   - Examples: サンプルアプリのロジック（Examples/ExampleKit）のビルドとテスト、アプリのビルド
 #
 # アクションはタグではなくコミット SHA で固定している（ルールは AGENTS.md）。
 # 更新は Dependabot（.github/dependabot.yml）に任せる。
@@ -182,3 +182,13 @@ jobs:
         run: swift build --build-tests -Xswiftc -warnings-as-errors
       - name: Test
         run: swift test --skip-build
+      - name: Build apps
+        working-directory: Examples
+        run: |
+          for scheme in SwiftUIExample UIKitExample; do
+            xcodebuild build \
+              -project Examples.xcodeproj \
+              -scheme "$scheme" \
+              -destination "generic/platform=iOS Simulator" \
+              CODE_SIGNING_ALLOWED=NO
+          done
