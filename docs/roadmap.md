@@ -19,7 +19,7 @@
 | 1-3 | `feature/store` | `@MainActor @Observable Store`、`dispatch`、再入検出 + テスト （[#4](https://github.com/mitsuharu/swift-redux-saga/pull/4)） |
 | 1-4 | `feature/middleware` | `Middleware` プロトコル、`MiddlewareAPI`、ミドルウェアチェーン + テスト （[#5](https://github.com/mitsuharu/swift-redux-saga/pull/5)） |
 | 1-5 | `feature/keypath-observation` | キーパス単位の Observation 追跡（設計書 5.4）+ テスト （[#6](https://github.com/mitsuharu/swift-redux-saga/pull/6)） |
-| 1-6 | `feature/store-observe` | OS に依存しない購読 API（`observe` / `values`）+ テスト |
+| 1-6 | `feature/store-observe` | OS に依存しない購読 API（`observe` / `values`）+ テスト （[#7](https://github.com/mitsuharu/swift-redux-saga/pull/7)） |
 | 1-7 | `feature/default-isolation-tests` | default MainActor isolation を有効にしたテストターゲット |
 
 ## M2: Saga コア
