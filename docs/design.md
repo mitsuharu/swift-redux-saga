@@ -92,7 +92,8 @@ swift-redux-saga
 ├── ReduxUIKit       UIKit 用ヘルパー（Redux）
 ├── SagaTesting      TestClock、SagaTester、Action の記録（Saga）
 ├── ReduxTesting     TestStore（Redux）
-└── ReduxMacros      マクロ（任意・最後に追加。swift-syntax に依存）
+├── ReduxMacros      マクロ（任意・最後に追加。swift-syntax に依存）
+└── InternalPrimitives  内部で共有する部品（`Locked` など）。プロダクトにせず `package` アクセスで使う
 ```
 
 依存関係:
@@ -139,7 +140,7 @@ Redux ◀── ReduxSaga ──▶ Saga
 
 - グローバルな可変状態（`static var`、シングルトン）を持たない。
 - `@unchecked Sendable` と `nonisolated(unsafe)` は原則使わない。使う場合は理由と、安全性の根拠をコメントに書く。
-- 排他制御は内部型 `Locked<Value>` に集約する。Darwin では `OSAllocatedUnfairLock`、Linux では `Synchronization.Mutex` を使う（`Mutex` は Apple OS では iOS 18 / macOS 15 からのため）。
+- 排他制御は `InternalPrimitives` の `Locked<Value>` に集約する。Darwin では `OSAllocatedUnfairLock`、Linux では `Synchronization.Mutex` を使う（`Mutex` は Apple OS では iOS 18 / macOS 15 からのため）。
 - 非同期のブリッジ（continuation）は必ずキャンセルハンドラを持ち、キャンセル時に登録を解除して resume する。リークを防ぐため、全 continuation が「ちょうど 1 回 resume される」ことをテストで確認する。
 
 ### default MainActor isolation を有効にしたアプリでの利用
