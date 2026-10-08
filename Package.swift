@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.2
 import PackageDescription
 
 let package = Package(
@@ -11,10 +11,29 @@ let package = Package(
     .visionOS(.v1),
   ],
   products: [
-    .library(name: "Redux", targets: ["Redux"])
+    .library(name: "Redux", targets: ["Redux"]),
+    .library(name: "Saga", targets: ["Saga"]),
+    .library(name: "ReduxSaga", targets: ["ReduxSaga"]),
+    .library(name: "ReduxSwiftUI", targets: ["ReduxSwiftUI"]),
+    .library(name: "ReduxUIKit", targets: ["ReduxUIKit"]),
+    .library(name: "SagaTesting", targets: ["SagaTesting"]),
+    .library(name: "ReduxTesting", targets: ["ReduxTesting"]),
   ],
   targets: [
-    .target(name: "Redux")
+    .target(name: "Redux"),
+    .target(name: "Saga"),
+    .target(name: "ReduxSaga", dependencies: ["Redux", "Saga"]),
+    .target(name: "ReduxSwiftUI", dependencies: ["Redux"]),
+    .target(name: "ReduxUIKit", dependencies: ["Redux"]),
+    .target(name: "SagaTesting", dependencies: ["Saga"]),
+    .target(name: "ReduxTesting", dependencies: ["Redux"]),
+
+    .testTarget(name: "ReduxTests", dependencies: ["Redux"]),
+    .testTarget(name: "SagaTests", dependencies: ["Saga", "SagaTesting"]),
+    .testTarget(name: "ReduxSagaTests", dependencies: ["ReduxSaga", "SagaTesting"]),
+    .testTarget(name: "ReduxSwiftUITests", dependencies: ["ReduxSwiftUI"]),
+    .testTarget(name: "ReduxUIKitTests", dependencies: ["ReduxUIKit"]),
+    .testTarget(name: "ReduxTestingTests", dependencies: ["ReduxTesting"]),
   ],
   swiftLanguageModes: [.v6]
 )

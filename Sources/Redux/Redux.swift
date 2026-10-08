@@ -1,3 +1,1 @@
-// Redux core for Swift.
-//
-// Implementation starts in Phase 1. See docs/roadmap.md.
+// Redux: 実装は docs/roadmap.md に沿って追加する。
