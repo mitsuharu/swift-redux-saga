@@ -710,19 +710,28 @@ public final class SagaMiddleware<State: Sendable, Action: Sendable>: Middleware
 
 ```swift
 public struct SagaError: Error {
-  public var underlying: any Error
-  /// エラーが伝播した Saga の経路（デバッグ用の名前。`Saga(name:)` で指定）。
-  public var sagaStack: [String]
+  public let underlying: any Error
+  /// エラーが伝播した Saga の経路（起きた Saga から根に向かう順。名前のない Saga は "anonymous"）。
+  public let sagaStack: [String]
+}
+
+public struct SagaID: Sendable, Hashable { }
+public enum SagaResult: Sendable { case completed, cancelled, failed(any Error) }
+public enum SagaEffect: Sendable {
+  case take, put(String), select, call, fork(SagaID), spawn(SagaID), join(SagaID), cancel(SagaID), delay(Duration)
 }
 
 public protocol SagaMonitor: Sendable {
-  func sagaStarted(id: SagaID, name: String?, parent: SagaID?)
-  func sagaFinished(id: SagaID, result: SagaResult)
-  func effectTriggered(id: SagaID, effect: EffectDescription)
+  func sagaStarted(_ id: SagaID, name: String?, parent: SagaID?)
+  func sagaFinished(_ id: SagaID, result: SagaResult)
+  func effectTriggered(_ id: SagaID, effect: SagaEffect)
 }
 ```
 
-- 既定の `onError` は、Darwin では `os.Logger`、Linux では標準エラー出力にログを出す。
+- `SagaRuntime.init(host:clock:monitor:onError:)` で `onError` と `monitor` を渡す。
+- `SagaTask.join()` / `ctx.join(_:)` が投げるのは元のエラー（`SagaError` で包まない）。経路が分かるのは `onError` だけ。join する側が元のエラーの型で `catch` できるようにするため。
+- `SagaEffect.put` が Action を文字列で持つのは、モニタを Action の型に依存させず、`Sendable` でない `Any` を持たないため。
+- 既定の `onError`（`SagaRuntime.logError`）は、Apple OS では `os.Logger`、それ以外では標準出力にログを出す。
 - `SagaMonitor` はログ出力やデバッグツール用のフック。テスト支援もこれを使う。
 
 ---

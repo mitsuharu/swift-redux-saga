@@ -10,6 +10,11 @@ public struct SagaTask: Sendable, Hashable {
     self.state = state
   }
 
+  /// Saga の識別子。``SagaMonitor`` に渡される識別子と同じです。
+  public var id: SagaID {
+    state.id
+  }
+
   /// Saga がまだ動いているかどうか。
   public var isRunning: Bool {
     state.status == nil
@@ -46,17 +51,10 @@ public struct SagaTask: Sendable, Hashable {
   }
 }
 
-/// Saga の終わり方。
-enum SagaTaskStatus: Sendable {
-  case completed
-  case failed(any Error)
-  case cancelled
-}
-
 /// ``SagaTask`` の中身。状態の遷移とキャンセルの要求、join の待ち合わせを管理する。
 final class SagaTaskState: Sendable {
   private struct Storage {
-    var status: SagaTaskStatus?
+    var status: SagaResult?
     var cancelRequested = false
     var cancelHandler: (@Sendable () -> Void)?
     var nextJoinerID = 0
@@ -69,14 +67,16 @@ final class SagaTaskState: Sendable {
     let fromSaga: Bool
   }
 
+  let id: SagaID
   private let storage = Locked(Storage())
   private let activity: Activity
 
-  init(activity: Activity) {
+  init(id: SagaID, activity: Activity) {
+    self.id = id
     self.activity = activity
   }
 
-  var status: SagaTaskStatus? {
+  var status: SagaResult? {
     storage.withLock { $0.status }
   }
 
@@ -104,19 +104,22 @@ final class SagaTaskState: Sendable {
     handler?()
   }
 
-  /// 終わり方を確定し、join で待っている側を再開する。2 回目以降は無視する。
-  func finish(_ status: SagaTaskStatus) {
-    let joiners = storage.withLock { storage -> [Joiner] in
-      guard storage.status == nil else { return [] }
+  /// 終わり方を確定し、join で待っている側を再開する。2 回目以降は無視して `false` を返す。
+  @discardableResult
+  func finish(_ status: SagaResult) -> Bool {
+    let joiners = storage.withLock { storage -> [Joiner]? in
+      guard storage.status == nil else { return nil }
       storage.status = status
       storage.cancelHandler = nil
       defer { storage.joiners = [:] }
       return Array(storage.joiners.values)
     }
+    guard let joiners else { return false }
     for joiner in joiners {
       if joiner.fromSaga { activity.begin() }
       Self.resume(joiner.continuation, with: status)
     }
+    return true
   }
 
   func join(fromSaga: Bool) async throws {
@@ -126,7 +129,7 @@ final class SagaTaskState: Sendable {
     }
     try await withTaskCancellationHandler {
       try await withCheckedThrowingContinuation { continuation in
-        let finished = storage.withLock { storage -> Result<SagaTaskStatus?, CancellationError> in
+        let finished = storage.withLock { storage -> Result<SagaResult?, CancellationError> in
           if let status = storage.status { return .success(status) }
           guard !Task.isCancelled else { return .failure(CancellationError()) }
           storage.joiners[id] = Joiner(continuation: continuation, fromSaga: fromSaga)
@@ -149,7 +152,7 @@ final class SagaTaskState: Sendable {
   }
 
   private static func resume(
-    _ continuation: CheckedContinuation<Void, any Error>, with status: SagaTaskStatus
+    _ continuation: CheckedContinuation<Void, any Error>, with status: SagaResult
   ) {
     switch status {
     case .completed: continuation.resume()

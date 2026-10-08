@@ -1,5 +1,9 @@
 import InternalPrimitives
 
+#if canImport(os)
+  import os
+#endif
+
 /// Saga を動かすランタイム。
 ///
 /// 1 つの状態管理（``SagaHost``）に対して 1 つ作ります。Action の配信用チャネルはこのインスタンスが所有します。
@@ -15,9 +19,12 @@ import InternalPrimitives
 public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
   let host: any SagaHost<State, Action>
   let clock: any Clock<Duration>
+  let monitor: (any SagaMonitor)?
+  private let onError: @Sendable (SagaError) -> Void
   package let activity = Activity()
   let multicaster: ActionMulticaster<Action>
   private let rootTasks = Locked(RootTasks())
+  private let nextID = Locked(0)
 
   private struct RootTasks {
     var tasks: Set<SagaTask> = []
@@ -29,13 +36,33 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
   /// - Parameters:
   ///   - host: Saga が Action を発行し、State を読む相手。
   ///   - clock: `delay` などが使う時計。テストでは `SagaTesting` の `TestClock` を渡します。
+  ///   - monitor: Saga の起動・終了・Effect を受け取るフック。
+  ///   - onError: 根（``run(_:)`` や `spawn` で起動した Saga）まで伝わった未処理のエラーを受け取る関数。
+  ///     既定ではログに出力します。
   public init<Host: SagaHost>(
     host: Host,
-    clock: any Clock<Duration> = ContinuousClock()
+    clock: any Clock<Duration> = ContinuousClock(),
+    monitor: (any SagaMonitor)? = nil,
+    onError: @escaping @Sendable (SagaError) -> Void = SagaRuntime.logError
   ) where Host.State == State, Host.Action == Action {
     self.host = host
     self.clock = clock
+    self.monitor = monitor
+    self.onError = onError
     self.multicaster = ActionMulticaster(activity: activity)
+  }
+
+  /// 未処理のエラーをログに出力します（`onError` の既定値）。
+  ///
+  /// Apple OS では `os.Logger`、それ以外では標準出力に出力します。
+  @Sendable
+  public static func logError(_ error: SagaError) {
+    #if canImport(os)
+      Logger(subsystem: "swift-redux-saga", category: "Saga")
+        .error("Unhandled error in saga: \(String(describing: error), privacy: .public)")
+    #else
+      print("[Saga] Unhandled error in saga: \(error)")
+    #endif
   }
 
   /// Host が処理した Action を Saga に届けます。
@@ -48,16 +75,18 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
   /// Saga を起動します。
   ///
   /// 起動した Saga は、呼び出し元のタスクとは独立して動きます。``stop()`` でまとめて止められます。
+  /// 未処理のエラーで終わった場合は `onError` に渡されます。
   @discardableResult
   public func run(_ saga: Saga<State, Action>) -> SagaTask {
-    let state = SagaTaskState(activity: activity)
+    let state = makeTaskState()
     let task = SagaTask(state: state)
     let isStopped = rootTasks.withLock { rootTasks -> Bool in
       if !rootTasks.isStopped { rootTasks.tasks.insert(task) }
       return rootTasks.isStopped
     }
+    monitor?.sagaStarted(state.id, name: saga.name, parent: nil)
     guard !isStopped else {
-      state.finish(.cancelled)
+      finish(state, .cancelled)
       return task
     }
 
@@ -84,17 +113,33 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
     }
   }
 
+  func makeTaskState() -> SagaTaskState {
+    let id = nextID.withLock { id in
+      defer { id += 1 }
+      return id
+    }
+    return SagaTaskState(id: SagaID(rawValue: id), activity: activity)
+  }
+
+  func finish(_ state: SagaTaskState, _ result: SagaResult) {
+    if state.finish(result) {
+      monitor?.sagaFinished(state.id, result: result)
+    }
+  }
+
   private func runRoot(_ saga: Saga<State, Action>, state: SagaTaskState) async {
     do {
-      try await runScoped(saga)
+      try await runScoped(saga, id: state.id)
       // キャンセルを受けた Saga が CancellationError を catch して正常に終わっても、キャンセルとして扱う
       // （redux-saga と同じ）。join する側が、止めたはずの Saga を完了と誤解しないため。
-      state.finish(state.isCancelRequested ? .cancelled : .completed)
+      finish(state, state.isCancelRequested ? .cancelled : .completed)
     } catch {
       if error is CancellationError || state.isCancelRequested {
-        state.finish(.cancelled)
+        finish(state, .cancelled)
       } else {
-        state.finish(.failed(error))
+        let error = error as? SagaError ?? SagaError.propagating(error, through: saga.name)
+        finish(state, .failed(error.underlying))
+        onError(error)
       }
     }
   }
@@ -104,20 +149,28 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
   /// 本体と子はすべて 1 つのタスクグループの子タスクになるため、親のキャンセルは子に伝わり、
   /// 子の失敗は兄弟と本体をキャンセルして親に伝わる。本体が終わっても、子がすべて終わるまで戻らない。
   /// 呼び出し側で `activity.begin()` 済みであること（本体の終了時に `end()` する）。
-  func runScoped(_ saga: Saga<State, Action>) async throws {
+  ///
+  /// 本体か子が失敗したら、この Saga を経路に加えた ``SagaError`` を投げる。
+  func runScoped(_ saga: Saga<State, Action>, id: SagaID) async throws {
     let forks = ForkQueue<ForkRequest>()
-    let context = SagaContext(runtime: self, forks: forks)
-    try await withThrowingDiscardingTaskGroup { group in
-      group.addTask {
-        defer {
-          forks.close()
-          self.activity.end()
+    let context = SagaContext(runtime: self, forks: forks, sagaID: id)
+    do {
+      try await withThrowingDiscardingTaskGroup { group in
+        group.addTask {
+          defer {
+            forks.close()
+            self.activity.end()
+          }
+          try await saga.run(context)
         }
-        try await saga.run(context)
+        while let request = await forks.next() {
+          group.addTask { try await request.run() }
+        }
       }
-      while let request = await forks.next() {
-        group.addTask { try await request.run() }
-      }
+    } catch is CancellationError {
+      throw CancellationError()
+    } catch {
+      throw SagaError.propagating(error, through: saga.name)
     }
   }
 
@@ -131,7 +184,7 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
     do {
       try await withThrowingTaskGroup(of: Bool.self) { group in
         group.addTask {
-          try await self.runScoped(saga)
+          try await self.runScoped(saga, id: state.id)
           return true
         }
         group.addTask {
@@ -146,12 +199,12 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
           _ = try await group.next()
         }
       }
-      state.finish(state.isCancelRequested || Task.isCancelled ? .cancelled : .completed)
+      finish(state, state.isCancelRequested || Task.isCancelled ? .cancelled : .completed)
     } catch {
       if error is CancellationError || state.isCancelRequested || Task.isCancelled {
-        state.finish(.cancelled)
+        finish(state, .cancelled)
       } else {
-        state.finish(.failed(error))
+        finish(state, .failed((error as? SagaError)?.underlying ?? error))
         throw error
       }
     }
