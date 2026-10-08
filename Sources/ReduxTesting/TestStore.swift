@@ -4,7 +4,7 @@ import ReduxSaga
 import Saga
 import SagaTesting
 
-/// 本物の ``Redux/Store`` とミドルウェア（Saga を含む）を動かし、Action と State の変化を 1 つずつ検証するテスト支援。
+/// 本物の `Store` とミドルウェア（Saga を含む）を動かし、Action と State の変化を 1 つずつ検証するテスト支援。
 ///
 /// ```swift
 /// @Test func increment() async throws {
@@ -21,7 +21,7 @@ import SagaTesting
 /// ```
 ///
 /// - `send` の `assert` には、送った Action を reducer に適用した直後の State を書きます（Saga が動く前）。
-/// - Saga やミドルウェアが dispatch した Action は ``receive(_:assert:)`` で順に確かめます。
+/// - Saga やミドルウェアが dispatch した Action は `receive(_:assert:)` で順に確かめます。
 /// - 待ち合わせは実時間ではなく「すべての Saga が Effect で止まったか」で行います。
 @MainActor
 public final class TestStore<State: Sendable & Equatable, Action: Sendable> {
@@ -80,7 +80,7 @@ public final class TestStore<State: Sendable & Equatable, Action: Sendable> {
     store.state
   }
 
-  /// Saga やミドルウェアが dispatch し、まだ ``receive(_:assert:)`` で確かめていない Action。
+  /// Saga やミドルウェアが dispatch し、まだ `receive(_:assert:)` で確かめていない Action。
   public var unreceivedActions: [Action] {
     recorder.records.map(\.action)
   }
@@ -101,6 +101,8 @@ public final class TestStore<State: Sendable & Equatable, Action: Sendable> {
   ///   - action: 送る Action。
   ///   - assert: 期待する State の変化。直前に確かめた State を書き換えて、Action を適用した直後の State にしてください。
   ///     省略すると State を確かめません。
+  ///   - fileID: 失敗の報告に使うファイル。
+  ///   - line: 失敗の報告に使う行。
   /// - Throws: State が期待と異なる場合は ``TestStoreFailure``。
   public func send(
     _ action: Action,
@@ -122,6 +124,8 @@ public final class TestStore<State: Sendable & Equatable, Action: Sendable> {
   /// - Parameters:
   ///   - expected: 期待する Action。
   ///   - assert: 期待する State の変化。省略すると State を確かめません。
+  ///   - fileID: 失敗の報告に使うファイル。
+  ///   - line: 失敗の報告に使う行。
   /// - Throws: Action がない、等しくない、または State が期待と異なる場合は ``TestStoreFailure``。
   public func receive(
     _ expected: Action,

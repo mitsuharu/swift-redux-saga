@@ -61,7 +61,7 @@ public final class SagaTester<State: Sendable, Action: Sendable>: Sendable {
     host.state
   }
 
-  /// Saga が発行し、まだ ``receive(_:)`` で確かめていない Action。
+  /// Saga が発行し、まだ `receive(_:)` で確かめていない Action。
   public var unreceivedActions: [Action] {
     host.received
   }
