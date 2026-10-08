@@ -225,6 +225,8 @@ public final class Store<State: Sendable, Action: Sendable> {
 
   /// State の一部を参照する。参照したキーパスだけが追跡対象になる（5.4 を参照）。
   public subscript<Value: Equatable>(dynamicMember keyPath: KeyPath<State, Value> & Sendable) -> Value { get }
+  /// 値が Equatable でない場合。State 全体の変化が追跡対象になる。
+  public subscript<Value>(dynamicMember keyPath: KeyPath<State, Value> & Sendable) -> Value { get }
 
   /// Action を同期で処理する。ミドルウェア → reducer の順に適用される。
   public func dispatch(_ action: Action)
@@ -255,12 +257,14 @@ dispatch の処理中に `dispatch` が呼ばれた場合（ミドルウェア�
 
 `@Observable` のマクロで `state` プロパティを追跡するだけだと、`store.state.count` を読んだ View は State のどのプロパティが変わっても再描画されます。プロパティ単位の追跡のために、Store は `ObservationRegistrar` を自前で管理します。
 
-- `store.count`（dynamic member）を読むと、`\Store.state` にキーパス `\State.count` をつないだキーパス `\Store.state.count` をアクセスとして登録する。
-- 登録時に、そのキーパスの値を比較するクロージャ（`Value: Equatable` を使う）を Store 内の表に記録する。
-- `dispatch` で reducer を適用した後、表にあるキーパスについて新旧の値を比較し、変わったものだけ `willSet` / `didSet` を通知する。
-- `store.state` を直接読んだ場合は `\Store.state` 全体の変更として通知する（State が `Equatable` なら変化がない時は通知しない）。
+- `store.count`（dynamic member）を読むと、`\Store.state` にキーパス `\State.count` をつないだキーパスをアクセスとして登録する。
+- 登録時に、そのキーパスの新旧の値を比較するクロージャ（`Value: Equatable` を使う）を Store 内の表に記録する。
+- `dispatch` で reducer を適用した後、表にあるキーパスについて新旧の値を比較し、変わったものだけ `willSet` / `didSet` を通知する。変わったキーパスがすべて `willSet` → 代入 → すべて `didSet` の順にする。
+- `store.state` を直接読んだ場合は `\Store.state` 全体の変更として通知する。State が `Equatable` なら、変化がないときは通知しない。
+- 値が `Equatable` でないプロパティを dynamic member で読んだ場合は、`\Store.state` 全体の変更として扱う。
+- 追跡の単位は Store から直接読んだプロパティ。`store.profile.name` は `profile` の変化で通知される（`name` 以外が変わっても通知される）。
 
-比較のコストは「これまでに参照されたキーパスの数」に比例します。表の掃除（参照されなくなったキーパスの削除）は実装時に方式を決めます（[未決事項](#14-未決事項)）。
+比較のコストは「これまでに参照されたキーパスの種類数」に比例します。表の要素はコード中で使われるキーパスの種類数で頭打ちになるため、削除しません。
 
 ### 5.5 Middleware
 
@@ -778,7 +782,7 @@ PR の「要確認事項」と同じ内容です。決まったらこの章を�
 2. **Swift ツールチェーンの下限**: Swift 6.2（Xcode 26）以降としてよいか。6.0 / 6.1 も対象にする場合、default isolation のテストや `Observations` の扱いが `#if` で複雑になる。
 3. **OS の下限**: iOS 17 / macOS 14 / tvOS 17 / watchOS 10 / visionOS 1 でよいか。iOS 18 / macOS 15 以上にすれば `Synchronization.Mutex` に統一できるが、利用者の幅が狭まる。
 4. **Action の表現**: `Store<State, Action>` のジェネリクスで enum とプロトコル存在型の両方を許す方針でよいか。
-5. **プロパティ単位の追跡（5.4）**: 自前の `ObservationRegistrar` とキーパス比較で実現する方針でよいか。値が `Equatable` でないキーパスは State 全体の変更として扱う。
+5. ~~**プロパティ単位の追跡（5.4）**~~: 自前の `ObservationRegistrar` とキーパス比較で実現した（M1-5）。
 6. **`put` の意味**: reducer の適用完了まで待つ（`await`）方針でよいか。redux-saga の `put` はスケジューリングされるだけで、厳密には異なる。
 7. **ターゲット分割**: `Redux` に Slice / Selector / EntityAdapter まで含める（RTK 相当を別ターゲットにしない）方針でよいか。
 8. **Example の形式**: `Examples/` 配下にローカルパッケージ（Domain / AppFeature）と Xcode プロジェクト（SwiftUI / UIKit アプリ）を置く方針でよいか。
