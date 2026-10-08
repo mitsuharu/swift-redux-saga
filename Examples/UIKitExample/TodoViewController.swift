@@ -40,7 +40,7 @@ final class TodoViewController: UIViewController {
     draftField.addAction(
       UIAction { [weak self] action in
         guard let self, let field = action.sender as? UITextField else { return }
-        store.dispatch(.draftChanged(field.text ?? ""))
+        store.dispatch(.binding(.set(\.$draft, field.text ?? "")))
       },
       for: .editingChanged)
 

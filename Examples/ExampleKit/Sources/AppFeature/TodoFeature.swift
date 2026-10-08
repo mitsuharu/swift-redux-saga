@@ -12,9 +12,10 @@ public enum TodoFeature {
   public struct State: Sendable, Equatable {
     public var todos = EntityState<Todo.ID, Todo>()
     public var isLoading = false
-    public var draft = ""
-    /// 検索欄に入力中の文字列。
-    public var query = ""
+    /// 新しい ToDo の入力欄。入力欄から直接書き換える（BindingAction）。
+    @BindableState public var draft = ""
+    /// 検索欄に入力中の文字列。入力欄から直接書き換える（BindingAction）。
+    @BindableState public var query = ""
     /// 入力が止まってから反映した検索語（Saga の debounce で更新する）。
     public var appliedQuery = ""
     public var errorMessage: String?
@@ -22,15 +23,16 @@ public enum TodoFeature {
     public init() {}
   }
 
-  public enum Action: Sendable, Equatable {
+  public enum Action: Sendable, Equatable, BindableAction {
+    /// 入力欄（draft / query）の書き換え。`store.binding(\.$draft)` が送る。
+    case binding(BindingAction<State>)
+
     // View から送る Action
     /// 一覧を読み込み直す（引っぱって更新など）。起動時は Saga が自分で送る。
     case refresh
-    case draftChanged(String)
     case addTapped
     case toggleTapped(Todo.ID)
     case deleteTapped(Todo.ID)
-    case queryChanged(String)
     case errorDismissed
 
     // Saga が送る Action
@@ -50,12 +52,10 @@ public enum TodoFeature {
     switch action {
     case .refresh:
       state.isLoading = true
-    case .draftChanged(let draft):
-      state.draft = draft
+    case .binding(let binding):
+      binding.apply(to: &state)
     case .addTapped, .toggleTapped, .deleteTapped:
       break
-    case .queryChanged(let query):
-      state.query = query
     case .queryApplied(let query):
       state.appliedQuery = query
     case .errorDismissed:
@@ -108,7 +108,7 @@ public struct TodoSagas: Sendable {
         }
       }
       // 入力が止まってから検索語を反映する。
-      ctx.debounce(.milliseconds(300), .case(\.queryChanged)) { ctx, query in
+      ctx.debounce(.milliseconds(300), .binding(\.$query)) { ctx, query in
         await ctx.put(.queryApplied(query))
       }
       ctx.takeEvery(.case(\.toggleTapped)) { ctx, id in

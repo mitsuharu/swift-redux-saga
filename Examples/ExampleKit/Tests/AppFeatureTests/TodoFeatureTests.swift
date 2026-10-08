@@ -58,7 +58,7 @@ private func makeStore(_ todos: [Todo] = [milk, bread]) -> TestStore<
     let store = makeStore([])
     await store.settle()
     store.skipReceivedActions()
-    try await store.send(.draftChanged("eggs")) { $0.draft = "eggs" }
+    try await store.send(.binding(.set(\.$draft, "eggs"))) { $0.draft = "eggs" }
     try await store.send(.addTapped)
     let added = try store.receive(.case { if case .added(let todo) = $0 { todo } else { nil } })
     #expect(added.title == "eggs")
@@ -94,9 +94,9 @@ private func makeStore(_ todos: [Todo] = [milk, bread]) -> TestStore<
     let store = makeStore()
     await store.settle()
     store.skipReceivedActions()
-    try await store.send(.queryChanged("m")) { $0.query = "m" }
+    try await store.send(.binding(.set(\.$query, "m"))) { $0.query = "m" }
     await store.advance(by: .milliseconds(200))
-    try await store.send(.queryChanged("mi")) { $0.query = "mi" }
+    try await store.send(.binding(.set(\.$query, "mi"))) { $0.query = "mi" }
     await store.advance(by: .milliseconds(300))
     try store.receive(.queryApplied("mi")) { $0.appliedQuery = "mi" }
     #expect(TodoFeature.visibleTodos(store.state) == [milk])
