@@ -41,6 +41,8 @@ env:
   # 同じ Readme で、Xcode 26.6 にインストール済みと確認したシミュレータ。
   IOS_SIMULATOR_NAME: iPhone 17
   IOS_SIMULATOR_RUNTIME: com.apple.CoreSimulator.SimRuntime.iOS-26-5
+  # Package.swift で、このパッケージのターゲットの警告をエラーにする（理由は Package.swift を参照）。
+  SWIFT_REDUX_SAGA_WARNINGS_AS_ERRORS: "1"
 
 jobs:
   format:
@@ -79,7 +81,7 @@ jobs:
           key: spm-macos-${{ hashFiles('Package.swift', 'Package.resolved') }}-${{ hashFiles('Sources/**', 'Tests/**') }}
           restore-keys: |
             spm-macos-${{ hashFiles('Package.swift', 'Package.resolved') }}-
-      # 「警告ゼロ」は Package.swift の treatAllWarnings(as: .error) で保証する。
+      # 「警告ゼロ」は、この環境変数で有効になる Package.swift の treatAllWarnings(as: .error) で保証する。
       # -Xswiftc -warnings-as-errors を使わないのは、依存の swift-syntax にも効いてしまうため。
       - name: Build
         run: swift build --build-tests
@@ -187,6 +189,10 @@ jobs:
         run: swift test --skip-build
       - name: Build apps
         working-directory: Examples
+        # Xcode はローカルパッケージを依存としてビルドするときに -suppress-warnings を付け、
+        # 警告をエラーにする設定と衝突するため、アプリのビルドでは無効にする。
+        env:
+          SWIFT_REDUX_SAGA_WARNINGS_AS_ERRORS: "0"
         run: |
           for scheme in SwiftUIExample UIKitExample; do
             xcodebuild build \
