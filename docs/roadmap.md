@@ -72,9 +72,7 @@
 | # | ブランチ | 内容 |
 | --- | --- | --- |
 | 7-1 | `feature/example-domain` | `Examples/` のローカルパッケージ（`Domain` / `AppFeature`）+ テスト （[#29](https://github.com/mitsuharu/swift-redux-saga/pull/29)） |
-| 7-2 | `feature/example-swiftui` | SwiftUI サンプルアプリ |
-| 7-3 | `feature/example-uikit` | UIKit サンプルアプリ |
-| 7-4 | `ci/example-build` | CI で Example をビルド |
+| 7-2 | `feature/example-swiftui` | SwiftUI / UIKit サンプルアプリ（`Examples.xcodeproj`）と CI でのビルド（7-3、7-4 を統合） |
 
 ## M8: マクロ（任意）
 

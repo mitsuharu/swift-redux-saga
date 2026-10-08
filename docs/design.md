@@ -884,6 +884,21 @@ AppFeature   Domain + 本ライブラリ（Action / State / Reducer / Saga）
 App          View と Store の組み立て（依存の注入）
 ```
 
+`Examples/` の構成:
+
+```
+Examples/
+├── ExampleKit/          ローカルパッケージ
+│   ├── Domain           Todo / TodoRepository / TodoUseCase（本ライブラリに依存しない）
+│   └── AppFeature       TodoFeature（Slice）/ TodoSagas / AppStore（組み立て）
+├── SwiftUIExample/      SwiftUI アプリ
+├── UIKitExample/        UIKit アプリ（iOS 17 から動くよう observe を使う）
+└── Examples.xcodeproj   両アプリ（default MainActor isolation を有効にしている）
+```
+
+- Xcode プロジェクトはフォルダ同期（`PBXFileSystemSynchronizedRootGroup`）を使い、ソースの追加でプロジェクトファイルを編集しなくて済むようにする。
+- シミュレータや実機での動作確認には [callstack/agent-device](https://github.com/callstack/agent-device) を使う。
+
 ---
 
 ## 12. マクロ（任意）
