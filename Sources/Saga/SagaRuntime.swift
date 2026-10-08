@@ -54,12 +54,18 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
 
   /// 未処理のエラーをログに出力します（`onError` の既定値）。
   ///
-  /// Apple OS では `os.Logger`、それ以外では標準出力に出力します。
+  /// Apple OS では `os.Logger` に出力します。エラーの内容は個人情報を含み得るため `.private`
+  /// （Xcode から実行しているときのコンソールには表示され、端末のログでは伏せられる）、
+  /// Saga の経路は `.public` で出力します。それ以外の OS では標準出力に出力します。
   @Sendable
   public static func logError(_ error: SagaError) {
     #if canImport(os)
-      Logger(subsystem: "swift-redux-saga", category: "Saga")
-        .error("Unhandled error in saga: \(String(describing: error), privacy: .public)")
+      Logger(subsystem: "swift-redux-saga", category: "Saga").error(
+        """
+        Unhandled error in saga \(error.sagaStack.joined(separator: " <- "), privacy: .public): \
+        \(String(describing: error.underlying), privacy: .private)
+        """
+      )
     #else
       print("[Saga] Unhandled error in saga: \(error)")
     #endif
