@@ -241,19 +241,21 @@ public final class Store<State: Sendable, Action: Sendable> {
 }
 ```
 
-`configureStore` 相当として、result builder でまとめて書ける初期化子も用意します。
+`configureStore` 相当として、result builder でまとめて書ける初期化子（`MiddlewareBuilder`）も用意します。
 
 ```swift
-let store = Store(initialState: AppState()) {
-  Reducer.scope(state: \.counter, action: \.counter, reducer: Counter.reducer)
-  Reducer.scope(state: \.todos, action: \.todos, reducer: Todos.reducer)
+let store = Store<AppState, AppAction>(initialState: AppState()) {
+  Reducer.slice(Counter.self, state: \.counter) { if case .counter(let a) = $0 { a } else { nil } }
+  Reducer.slice(Todos.self, state: \.todos) { if case .todos(let a) = $0 { a } else { nil } }
 } middleware: {
   sagaMiddleware
-  LoggerMiddleware()
+  if isDebug {
+    LoggerMiddleware()
+  }
 }
 ```
 
-（`action: \.counter` のような書き方は enum の case キーパスがない Swift では使えないため、マクロなしでは `action: { if case .counter(let a) = $0 { a } else { nil } }` と書きます。マクロ版で短くします。）
+（enum の case キーパスがない Swift では、Action の取り出しを `{ if case .counter(let a) = $0 { a } else { nil } }` と書きます。マクロ版で短くします。）
 
 dispatch の処理中に `dispatch` が呼ばれた場合（ミドルウェアや Observation の通知の中から呼ばれた場合）は、その場では処理せずキューに積み、処理中の Action が終わった後に呼ばれた順に処理します。
 
