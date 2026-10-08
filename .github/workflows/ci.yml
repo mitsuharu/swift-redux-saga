@@ -1,20 +1,15 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
-      - "LICENSE"
   pull_request:
+    types: [opened, synchronize, reopened]
     paths-ignore:
       - "**.md"
       - "docs/**"
       - "LICENSE"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 permissions:
