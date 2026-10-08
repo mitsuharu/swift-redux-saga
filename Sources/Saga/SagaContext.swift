@@ -5,15 +5,15 @@
 public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
   let runtime: SagaRuntime<State, Action>
   let forks: ForkQueue<SagaRuntime<State, Action>.ForkRequest>
-  let sagaID: SagaID
+  let task: SagaTaskState
 
   /// この Saga の識別子。
   public var id: SagaID {
-    sagaID
+    task.id
   }
 
   private func trigger(_ effect: SagaEffect) {
-    runtime.monitor?.effectTriggered(sagaID, effect: effect)
+    runtime.monitor?.effectTriggered(task.id, effect: effect)
   }
 
   /// 現在のタスクがキャンセルされているかどうか（redux-saga の `cancelled()` 相当）。
@@ -72,13 +72,18 @@ public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
   @discardableResult
   public func fork(_ saga: Saga<State, Action>) -> SagaTask {
     let state = runtime.makeTaskState()
+    let parent = task
     trigger(.fork(state.id))
-    runtime.monitor?.sagaStarted(state.id, name: saga.name, parent: sagaID)
+    runtime.monitor?.sagaStarted(state.id, name: saga.name, parent: parent.id)
     runtime.activity.begin()
+    parent.childDidStart()
     let accepted = forks.push(
-      SagaRuntime.ForkRequest { [runtime] in try await runtime.runForked(saga, state: state) })
+      SagaRuntime.ForkRequest { [runtime] in
+        try await runtime.runForked(saga, state: state, parent: parent)
+      })
     if !accepted {
       // 呼び出し元の本体が終わった後に fork された（コンテキストを外に持ち出した）場合。
+      parent.childDidFinish(failed: false)
       runtime.activity.end()
       runtime.finish(state, .cancelled)
     }
@@ -129,6 +134,24 @@ public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
   public func join(_ task: SagaTask) async throws {
     trigger(.join(task.id))
     try await task.state.join(fromSaga: true)
+  }
+
+  // MARK: - delay
+
+  /// 指定した時間だけ待ちます。
+  ///
+  /// ランタイムに渡した `Clock` を使います。テストでは `SagaTesting` の `TestClock` で時間を進められます。
+  ///
+  /// - Throws: 待っている間にキャンセルされた場合は `CancellationError`。
+  public func delay(_ duration: Duration) async throws {
+    trigger(.delay(duration))
+    if let clock = runtime.clock as? any ActivityTrackingClock {
+      let activity = runtime.activity
+      activity.end()
+      try await clock.sleep(for: duration) { activity.begin() }
+    } else {
+      try await runtime.clock.sleep(for: duration)
+    }
   }
 
   // MARK: - call

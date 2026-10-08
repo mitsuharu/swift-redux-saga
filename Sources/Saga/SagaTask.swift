@@ -59,6 +59,10 @@ final class SagaTaskState: Sendable {
     var cancelHandler: (@Sendable () -> Void)?
     var nextJoinerID = 0
     var joiners: [Int: Joiner] = [:]
+    // 以下は Activity の数え方のための状態（Activity.swift を参照）。
+    var liveChildren = 0
+    var isBodyDone = false
+    var holdsUnit = false
   }
 
   private struct Joiner {
@@ -95,13 +99,67 @@ final class SagaTaskState: Sendable {
   }
 
   func cancel() {
-    let handler = storage.withLock { storage -> (@Sendable () -> Void)? in
-      guard storage.status == nil, !storage.cancelRequested else { return nil }
+    let (handler, acquired) = storage.withLock {
+      storage -> ((@Sendable () -> Void)?, Bool) in
+      guard storage.status == nil, !storage.cancelRequested else { return (nil, false) }
       storage.cancelRequested = true
       defer { storage.cancelHandler = nil }
-      return storage.cancelHandler
+      return (storage.cancelHandler, Self.acquireUnit(&storage))
     }
+    // キャンセルが Effect の待機を外すまでの間も実行中として数える（終わるまで手放さない）。
+    if acquired { activity.begin() }
     handler?()
+  }
+
+  // MARK: - Activity の数え方
+  //
+  // Saga の本体が実行中のあいだは 1 つ数える。Effect で止まっている間は数えない（Effect の側で増減する）。
+  // 本体が終わってから finish するまでの「後始末」も 1 つ数える。後始末の単位（unit）は次のどれかで取得し、
+  // finish で手放す。
+  // - 本体が終わった時点で子がいなければ、本体の分をそのまま後始末の分にする。
+  // - 本体が終わって子を待っている間は数えない。最後の子が終わるときに、子が親の分を取得する。
+  // - 子が失敗したとき、子が親の分を取得する（親が兄弟と本体をキャンセルし終えるまで数えるため）。
+  // - キャンセルを要求されたとき。
+  // いずれも、取得する側は自分の分を手放す前に取得する（数が一時的に 0 になって settle が早く返らないため）。
+
+  private static func acquireUnit(_ storage: inout Storage) -> Bool {
+    guard !storage.holdsUnit, storage.status == nil else { return false }
+    storage.holdsUnit = true
+    return true
+  }
+
+  /// 後始末の分を取得する。すでに持っていれば何もしない。
+  func acquireUnit() {
+    if storage.withLock({ Self.acquireUnit(&$0) }) {
+      activity.begin()
+    }
+  }
+
+  /// 本体が終わったときに呼ぶ。本体の分を後始末の分にするか、手放す。
+  func bodyDidFinish() {
+    let release = storage.withLock { storage -> Bool in
+      storage.isBodyDone = true
+      if storage.liveChildren == 0, !storage.holdsUnit {
+        storage.holdsUnit = true
+        return false
+      }
+      return true
+    }
+    if release { activity.end() }
+  }
+
+  /// 子を fork したときに呼ぶ。
+  func childDidStart() {
+    storage.withLock { $0.liveChildren += 1 }
+  }
+
+  /// 子が終わったときに、子が自分の分を手放す前に呼ぶ。
+  func childDidFinish(failed: Bool) {
+    let needsUnit = storage.withLock { storage -> Bool in
+      storage.liveChildren -= 1
+      return failed || (storage.liveChildren == 0 && storage.isBodyDone)
+    }
+    if needsUnit { acquireUnit() }
   }
 
   /// 終わり方を確定し、join で待っている側を再開する。2 回目以降は無視して `false` を返す。
@@ -119,6 +177,12 @@ final class SagaTaskState: Sendable {
       if joiner.fromSaga { activity.begin() }
       Self.resume(joiner.continuation, with: status)
     }
+    // join している側を数えてから手放す。
+    let holdsUnit = storage.withLock { storage in
+      defer { storage.holdsUnit = false }
+      return storage.holdsUnit
+    }
+    if holdsUnit { activity.end() }
     return true
   }
 
