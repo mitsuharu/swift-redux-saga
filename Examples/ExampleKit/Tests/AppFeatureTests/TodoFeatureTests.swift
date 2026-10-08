@@ -54,16 +54,25 @@ private func makeStore(_ todos: [Todo] = [milk, bread]) -> TestStore<
     try await store.finish()
   }
 
-  @Test func addTappedAddsTheDraftAndClearsIt() async throws {
+  @Test func addAddsATodoWithTheTitle() async throws {
     let store = makeStore([])
     await store.settle()
     store.skipReceivedActions()
-    try await store.send(.binding(.set(\.$draft, "eggs"))) { $0.draft = "eggs" }
-    try await store.send(.addTapped)
-    let added = try store.receive(.case { if case .added(let todo) = $0 { todo } else { nil } })
+    try await store.send(.add(title: "eggs"))
+    let added = try store.receive(.case(\.added))
     #expect(added.title == "eggs")
-    #expect(store.state.draft == "")
     #expect(TodoFeature.visibleTodos(store.state).map(\.title) == ["eggs"])
+    try await store.finish()
+  }
+
+  @Test func hidingCompletedTodosFiltersThemOut() async throws {
+    var done = bread
+    done.isDone = true
+    let store = makeStore([milk, done])
+    await store.settle()
+    store.skipReceivedActions()
+    try await store.send(.setShowsCompleted(false)) { $0.preferences.showsCompleted = false }
+    #expect(TodoFeature.visibleTodos(store.state) == [milk])
     try await store.finish()
   }
 

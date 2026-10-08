@@ -19,8 +19,8 @@ struct SwiftUIExampleApp: App {
 
   var body: some Scene {
     WindowGroup {
-      TodoListView()
-        .store(store)
+      // 画面には ViewModel を渡す（MVVM と併用する）。ViewModel が Store を読む。
+      TodoListView(viewModel: TodoListViewModel(store: store))
     }
   }
 }

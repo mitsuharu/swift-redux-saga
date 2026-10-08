@@ -1,56 +1,56 @@
 import AppFeature
 import Domain
-import Redux
-import ReduxSwiftUI
 import SwiftUI
 
+/// View は ViewModel だけを見る。Store や Action は ViewModel が扱う。
 struct TodoListView: View {
-  @Environment(Store<TodoFeature.State, TodoFeature.Action>.self) private var store
+  @State var viewModel: TodoListViewModel
 
   var body: some View {
     NavigationStack {
       List {
         Section {
           HStack {
-            TextField("New ToDo", text: store.binding(\.$draft))
-              .onSubmit { store.dispatch(.addTapped) }
+            TextField("New ToDo", text: $viewModel.draft)
+              .onSubmit { viewModel.add() }
               .accessibilityIdentifier("draftField")
-            Button("Add") { store.dispatch(.addTapped) }
-              .disabled(store.draft.isEmpty)
+            Button("Add") { viewModel.add() }
+              .disabled(!viewModel.canAdd)
               .accessibilityIdentifier("addButton")
           }
+          Toggle("Show completed", isOn: $viewModel.showsCompleted)
+            .accessibilityIdentifier("showsCompletedToggle")
         }
         Section {
-          // 一覧は検索語で絞り込んだ結果（createSelector でメモ化）。
-          ForEach(TodoFeature.visibleTodos(store.state)) { todo in
-            TodoRow(todo: todo) { store.dispatch(.toggleTapped(todo.id)) }
+          ForEach(viewModel.todos) { todo in
+            TodoRow(todo: todo) { viewModel.toggle(todo.id) }
           }
           .onDelete { offsets in
-            let todos = TodoFeature.visibleTodos(store.state)
+            let todos = viewModel.todos
             for offset in offsets {
-              store.dispatch(.deleteTapped(todos[offset].id))
+              viewModel.delete(todos[offset].id)
             }
           }
         }
       }
       .overlay {
-        if store.isLoading {
+        if viewModel.isLoading {
           ProgressView()
         }
       }
       .navigationTitle("ToDo")
-      .searchable(text: store.binding(\.$query))
-      .refreshable { store.dispatch(.refresh) }
+      .searchable(text: $viewModel.query)
+      .refreshable { viewModel.refresh() }
       .alert(
         "Error",
         isPresented: Binding(
-          get: { store.errorMessage != nil },
-          set: { if !$0 { store.dispatch(.errorDismissed) } }
+          get: { viewModel.errorMessage != nil },
+          set: { if !$0 { viewModel.dismissError() } }
         )
       ) {
-        Button("OK") { store.dispatch(.errorDismissed) }
+        Button("OK") { viewModel.dismissError() }
       } message: {
-        Text(store.errorMessage ?? "")
+        Text(viewModel.errorMessage ?? "")
       }
     }
   }
@@ -74,6 +74,8 @@ private struct TodoRow: View {
 }
 
 #Preview {
-  TodoListView()
-    .store(AppStore.make(useCase: TodoUseCase(repository: InMemoryTodoRepository(latency: .zero))))
+  TodoListView(
+    viewModel: TodoListViewModel(
+      store: AppStore.make(
+        useCase: TodoUseCase(repository: InMemoryTodoRepository(latency: .zero)))))
 }

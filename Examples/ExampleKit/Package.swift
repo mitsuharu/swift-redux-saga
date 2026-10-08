@@ -25,6 +25,7 @@ let package = Package(
         .product(name: "Saga", package: "swift-redux-saga"),
         .product(name: "ReduxSaga", package: "swift-redux-saga"),
         .product(name: "ReduxMacros", package: "swift-redux-saga"),
+        .product(name: "ReduxPersistence", package: "swift-redux-saga"),
       ]
     ),
     .testTarget(name: "DomainTests", dependencies: ["Domain"]),
