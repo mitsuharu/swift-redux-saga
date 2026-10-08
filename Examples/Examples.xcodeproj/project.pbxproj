@@ -1,0 +1,430 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		5A6A00000000000000000001 /* AppFeature in Frameworks */ = {isa = PBXBuildFile; productRef = 5A6A00000000000000000002 /* AppFeature */; };
+		5A6A00000000000000000003 /* Domain in Frameworks */ = {isa = PBXBuildFile; productRef = 5A6A00000000000000000004 /* Domain */; };
+		5A6A00000000000000000005 /* Redux in Frameworks */ = {isa = PBXBuildFile; productRef = 5A6A00000000000000000006 /* Redux */; };
+		5A6A00000000000000000007 /* ReduxSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = 5A6A00000000000000000008 /* ReduxSwiftUI */; };
+		5A6A00000000000000000009 /* AppFeature in Frameworks */ = {isa = PBXBuildFile; productRef = 5A6A0000000000000000000A /* AppFeature */; };
+		5A6A0000000000000000000B /* Domain in Frameworks */ = {isa = PBXBuildFile; productRef = 5A6A0000000000000000000C /* Domain */; };
+		5A6A0000000000000000000D /* Redux in Frameworks */ = {isa = PBXBuildFile; productRef = 5A6A0000000000000000000E /* Redux */; };
+		5A6A0000000000000000000F /* ReduxUIKit in Frameworks */ = {isa = PBXBuildFile; productRef = 5A6A00000000000000000010 /* ReduxUIKit */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		5A6A00000000000000000011 /* SwiftUIExample.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SwiftUIExample.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5A6A00000000000000000012 /* UIKitExample.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = UIKitExample.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		5A6A00000000000000000013 /* SwiftUIExample */ = {isa = PBXFileSystemSynchronizedRootGroup; path = SwiftUIExample; sourceTree = "<group>"; };
+		5A6A00000000000000000014 /* UIKitExample */ = {isa = PBXFileSystemSynchronizedRootGroup; path = UIKitExample; sourceTree = "<group>"; };
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		5A6A00000000000000000015 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5A6A00000000000000000001 /* AppFeature in Frameworks */,
+				5A6A00000000000000000003 /* Domain in Frameworks */,
+				5A6A00000000000000000005 /* Redux in Frameworks */,
+				5A6A00000000000000000007 /* ReduxSwiftUI in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5A6A00000000000000000016 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5A6A00000000000000000009 /* AppFeature in Frameworks */,
+				5A6A0000000000000000000B /* Domain in Frameworks */,
+				5A6A0000000000000000000D /* Redux in Frameworks */,
+				5A6A0000000000000000000F /* ReduxUIKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		5A6A00000000000000000017 = {
+			isa = PBXGroup;
+			children = (
+				5A6A00000000000000000013 /* SwiftUIExample */,
+				5A6A00000000000000000014 /* UIKitExample */,
+				5A6A00000000000000000018 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		5A6A00000000000000000018 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				5A6A00000000000000000011 /* SwiftUIExample.app */,
+				5A6A00000000000000000012 /* UIKitExample.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		5A6A00000000000000000019 /* SwiftUIExample */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5A6A0000000000000000001A /* Build configuration list for PBXNativeTarget "SwiftUIExample" */;
+			buildPhases = (
+				5A6A0000000000000000001B /* Sources */,
+				5A6A00000000000000000015 /* Frameworks */,
+				5A6A0000000000000000001C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				5A6A00000000000000000013 /* SwiftUIExample */,
+			);
+			name = SwiftUIExample;
+			packageProductDependencies = (
+				5A6A00000000000000000002 /* AppFeature */,
+				5A6A00000000000000000004 /* Domain */,
+				5A6A00000000000000000006 /* Redux */,
+				5A6A00000000000000000008 /* ReduxSwiftUI */,
+			);
+			productName = SwiftUIExample;
+			productReference = 5A6A00000000000000000011 /* SwiftUIExample.app */;
+			productType = "com.apple.product-type.application";
+		};
+		5A6A0000000000000000001D /* UIKitExample */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5A6A0000000000000000001E /* Build configuration list for PBXNativeTarget "UIKitExample" */;
+			buildPhases = (
+				5A6A0000000000000000001F /* Sources */,
+				5A6A00000000000000000016 /* Frameworks */,
+				5A6A00000000000000000020 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				5A6A00000000000000000014 /* UIKitExample */,
+			);
+			name = UIKitExample;
+			packageProductDependencies = (
+				5A6A0000000000000000000A /* AppFeature */,
+				5A6A0000000000000000000C /* Domain */,
+				5A6A0000000000000000000E /* Redux */,
+				5A6A00000000000000000010 /* ReduxUIKit */,
+			);
+			productName = UIKitExample;
+			productReference = 5A6A00000000000000000012 /* UIKitExample.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		5A6A00000000000000000021 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2600;
+				LastUpgradeCheck = 2600;
+			};
+			buildConfigurationList = 5A6A00000000000000000022 /* Build configuration list for PBXProject "Examples" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 5A6A00000000000000000017;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				5A6A00000000000000000023 /* XCLocalSwiftPackageReference "ExampleKit" */,
+				5A6A00000000000000000024 /* XCLocalSwiftPackageReference ".." */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 5A6A00000000000000000018 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				5A6A00000000000000000019 /* SwiftUIExample */,
+				5A6A0000000000000000001D /* UIKitExample */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		5A6A0000000000000000001C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5A6A00000000000000000020 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		5A6A0000000000000000001B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5A6A0000000000000000001F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		5A6A00000000000000000025 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		5A6A00000000000000000026 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 6.0;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		5A6A00000000000000000027 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.mitsuharu.swift-redux-saga.SwiftUIExample;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		5A6A00000000000000000028 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.mitsuharu.swift-redux-saga.SwiftUIExample;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		5A6A00000000000000000029 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.mitsuharu.swift-redux-saga.UIKitExample;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		5A6A0000000000000000002A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.mitsuharu.swift-redux-saga.UIKitExample;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		5A6A00000000000000000022 /* Build configuration list for PBXProject "Examples" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5A6A00000000000000000025 /* Debug */,
+				5A6A00000000000000000026 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5A6A0000000000000000001A /* Build configuration list for PBXNativeTarget "SwiftUIExample" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5A6A00000000000000000027 /* Debug */,
+				5A6A00000000000000000028 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5A6A0000000000000000001E /* Build configuration list for PBXNativeTarget "UIKitExample" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5A6A00000000000000000029 /* Debug */,
+				5A6A0000000000000000002A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		5A6A00000000000000000023 /* XCLocalSwiftPackageReference "ExampleKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ExampleKit;
+		};
+		5A6A00000000000000000024 /* XCLocalSwiftPackageReference ".." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ..;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		5A6A00000000000000000002 /* AppFeature */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5A6A00000000000000000023 /* XCLocalSwiftPackageReference "ExampleKit" */;
+			productName = AppFeature;
+		};
+		5A6A00000000000000000004 /* Domain */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5A6A00000000000000000023 /* XCLocalSwiftPackageReference "ExampleKit" */;
+			productName = Domain;
+		};
+		5A6A00000000000000000006 /* Redux */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5A6A00000000000000000024 /* XCLocalSwiftPackageReference ".." */;
+			productName = Redux;
+		};
+		5A6A00000000000000000008 /* ReduxSwiftUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5A6A00000000000000000024 /* XCLocalSwiftPackageReference ".." */;
+			productName = ReduxSwiftUI;
+		};
+		5A6A0000000000000000000A /* AppFeature */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5A6A00000000000000000023 /* XCLocalSwiftPackageReference "ExampleKit" */;
+			productName = AppFeature;
+		};
+		5A6A0000000000000000000C /* Domain */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5A6A00000000000000000023 /* XCLocalSwiftPackageReference "ExampleKit" */;
+			productName = Domain;
+		};
+		5A6A0000000000000000000E /* Redux */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5A6A00000000000000000024 /* XCLocalSwiftPackageReference ".." */;
+			productName = Redux;
+		};
+		5A6A00000000000000000010 /* ReduxUIKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5A6A00000000000000000024 /* XCLocalSwiftPackageReference ".." */;
+			productName = ReduxUIKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 5A6A00000000000000000021 /* Project object */;
+}
