@@ -85,6 +85,10 @@
 - 並行処理のテストは `TestClock` や `settle()` を使い、実時間や `Task.yield()` の回数に依存しない。フレーキーなテストを入れない。
 - キャンセル、エラー、競合するタイミングのケースを必ず含める。
 
+## シミュレータ・実機での動作確認
+
+- Example アプリをシミュレータや実機で操作・確認するときは [callstack/agent-device](https://github.com/callstack/agent-device) を使う。
+
 ## GitHub Actions
 
 - サードパーティを含むすべてのアクションは、タグではなく**コミットの完全な SHA** で固定し、行末にバージョンをコメントで書く（GitHub 公式のセキュリティ強化ガイドの推奨）。
