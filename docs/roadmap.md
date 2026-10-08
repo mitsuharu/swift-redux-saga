@@ -27,7 +27,7 @@
 | # | ブランチ | 内容 |
 | --- | --- | --- |
 | 2-1 | `feature/locked` | 内部の排他制御 `Locked<Value>`（Darwin / Linux）+ テスト （[#9](https://github.com/mitsuharu/swift-redux-saga/pull/9)） |
-| 2-2 | `feature/action-pattern` | `ActionPattern`（型による判定、パターンマッチ）+ テスト |
+| 2-2 | `feature/action-pattern` | `ActionPattern`（型による判定、パターンマッチ）+ テスト （[#11](https://github.com/mitsuharu/swift-redux-saga/pull/11)） |
 | 2-3 | `feature/saga-runtime` | `SagaHost`、`SagaRuntime`、`ActionMulticaster`、`Saga` / `SagaContext` の骨格 + テスト |
 | 2-4 | `feature/saga-basic-effects` | `take` / `put` / `select` / `call` + テスト |
 | 2-5 | `feature/saga-fork` | `fork` / `spawn` / `SagaTask.cancel` / `join` / `isCancelled`、キャンセル伝播 + テスト |
