@@ -17,7 +17,8 @@ public enum AppStore {
     let store = Store(
       initialState: TodoFeature.initialState,
       reducer: TodoFeature.reducer,
-      middleware: [sagaMiddleware]
+      // LoggingMiddleware はデバッグビルドでだけ Action を os.Logger に出力する。
+      middleware: [LoggingMiddleware(), sagaMiddleware]
     )
     sagaMiddleware.run(TodoSagas(useCase: useCase).root)
     return store
