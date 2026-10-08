@@ -34,6 +34,12 @@ let package = Package(
     .testTarget(name: "ReduxSwiftUITests", dependencies: ["ReduxSwiftUI"]),
     .testTarget(name: "ReduxUIKitTests", dependencies: ["ReduxUIKit"]),
     .testTarget(name: "ReduxTestingTests", dependencies: ["ReduxTesting"]),
+    // アプリが default MainActor isolation を有効にしていても使えることを確かめるテスト。
+    .testTarget(
+      name: "DefaultIsolationTests",
+      dependencies: ["Redux"],
+      swiftSettings: [.defaultIsolation(MainActor.self)]
+    ),
   ],
   swiftLanguageModes: [.v6]
 )
