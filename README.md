@@ -15,7 +15,7 @@ Swift 6 で書かれた Redux（[Redux Toolkit](https://redux-toolkit.js.org/) �
 
 ## 動作環境（予定）
 
-- Swift 6.0 以降
+- Swift 6.2 以降（Xcode 26 以降）
 - iOS 17 / macOS 14 / tvOS 17 / watchOS 10 / visionOS 1 以降
 
 ## 背景
