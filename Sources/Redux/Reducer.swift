@@ -84,6 +84,24 @@ extension Reducer {
   }
 }
 
+extension Reducer {
+  /// 子の reducer を、親の State と Action に持ち上げます（Action をキーパスで取り出す版）。
+  ///
+  /// `ReduxMacros` の `@ActionCases` を親の Action に付けると、`action: \.counter` のように書けます。
+  ///
+  /// - Parameters:
+  ///   - state: 親の State の中で、子の State がある場所。
+  ///   - action: 親の Action から子の Action を取り出すキーパス。`nil` を返した Action は子に渡しません。
+  ///   - reducer: 子の reducer。
+  public static func scope<ChildState, ChildAction>(
+    state: WritableKeyPath<State, ChildState> & Sendable,
+    action: KeyPath<Action, ChildAction?> & Sendable,
+    reducer: Reducer<ChildState, ChildAction>
+  ) -> Reducer {
+    scope(state: state, action: { $0[keyPath: action] }, reducer: reducer)
+  }
+}
+
 /// 複数の reducer を宣言的に並べて、上から順に適用する reducer にまとめる result builder。
 @resultBuilder
 public enum ReducerBuilder<State: Sendable, Action: Sendable> {

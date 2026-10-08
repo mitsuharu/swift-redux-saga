@@ -27,6 +27,19 @@ public struct ActionPattern<Action: Sendable, Value: Sendable>: Sendable {
     Self(extract)
   }
 
+  /// Action のプロパティ（キーパス）が値を返したら一致するパターンを作ります。
+  ///
+  /// `ReduxMacros` の `@ActionCases` を enum に付けると、case ごとに「その case なら関連値を返し、
+  /// そうでなければ `nil` を返す」プロパティが生成されるので、次のように書けます。
+  ///
+  /// ```swift
+  /// let id = try await ctx.take(.case(\.toggleTapped))
+  /// let query = try await ctx.take(.case(\.user?.search))   // ネストした enum
+  /// ```
+  public static func `case`(_ keyPath: KeyPath<Action, Value?> & Sendable) -> Self {
+    Self { $0[keyPath: keyPath] }
+  }
+
   /// 型で判定するパターンを作ります。
   ///
   /// `Action` がプロトコル存在型（`any AppAction` など）で、Action ごとに型を分けている場合に使います。
