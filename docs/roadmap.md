@@ -78,7 +78,7 @@
 
 | # | ブランチ | 内容 |
 | --- | --- | --- |
-| 8-1 | `feature/macros` | `ReduxMacros`（swift-syntax）、`@ActionCases`、`@Slice`、キーパス版の `ActionPattern.case` / `Reducer.scope` / `slice` + テスト、Example への適用（8-2、8-3 を統合） |
+| 8-1 | `feature/macros` | `ReduxMacros`（swift-syntax）、`@ActionCases`、`@Slice`、キーパス版の `ActionPattern.case` / `Reducer.scope` / `slice` + テスト、Example への適用（8-2、8-3 を統合） （[#32](https://github.com/mitsuharu/swift-redux-saga/pull/32)） |
 
 ## M9: ドキュメント整備
 
