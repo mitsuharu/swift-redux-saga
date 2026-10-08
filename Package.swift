@@ -20,14 +20,17 @@ let package = Package(
     .library(name: "ReduxTesting", targets: ["ReduxTesting"]),
   ],
   targets: [
-    .target(name: "Redux"),
-    .target(name: "Saga"),
+    // ライブラリ内部で共有する部品。プロダクトとして公開せず、`package` アクセスで使う。
+    .target(name: "InternalPrimitives"),
+    .target(name: "Redux", dependencies: ["InternalPrimitives"]),
+    .target(name: "Saga", dependencies: ["InternalPrimitives"]),
     .target(name: "ReduxSaga", dependencies: ["Redux", "Saga"]),
     .target(name: "ReduxSwiftUI", dependencies: ["Redux"]),
     .target(name: "ReduxUIKit", dependencies: ["Redux"]),
     .target(name: "SagaTesting", dependencies: ["Saga"]),
     .target(name: "ReduxTesting", dependencies: ["Redux"]),
 
+    .testTarget(name: "InternalPrimitivesTests", dependencies: ["InternalPrimitives"]),
     .testTarget(name: "ReduxTests", dependencies: ["Redux"]),
     .testTarget(name: "SagaTests", dependencies: ["Saga", "SagaTesting"]),
     .testTarget(name: "ReduxSagaTests", dependencies: ["ReduxSaga", "SagaTesting"]),
