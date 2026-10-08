@@ -10,14 +10,19 @@ public enum ChannelBuffer: Sendable {
   case oldest(Int)
 }
 
-/// 値を溜めて、受け取り側（1 つの Saga）に順に渡すチャネルの中身。
+/// 値を溜めて、受け取り側に順に渡すチャネルの中身。
+///
+/// 受け取り側は複数でもよい。複数の Saga が待っている場合は、待ち始めた順に 1 つずつ渡す
+/// （redux-saga のワーカープールのように、1 つのチャネルを複数のワーカーで読める）。
 ///
 /// `AsyncStream` を使わないのは、受け取り側の再開を Activity で数える必要があるため
 /// （値を渡す側が resume の直前に数える。`Activity` を参照）。
 final class ChannelCore<Value: Sendable>: Sendable {
   private struct Storage {
     var buffer: [Value] = []
-    var taker: CheckedContinuation<Value?, any Error>?
+    var nextTakerID = 0
+    /// 待っている受け取り側。待ち始めた順。
+    var takers: [(id: Int, continuation: CheckedContinuation<Value?, any Error>)] = []
     var isClosed = false
     var onClose: (@Sendable () -> Void)?
   }
@@ -51,9 +56,8 @@ final class ChannelCore<Value: Sendable>: Sendable {
   func put(_ value: Value) {
     let taker = storage.withLock { [policy] storage -> CheckedContinuation<Value?, any Error>? in
       guard !storage.isClosed else { return nil }
-      if let taker = storage.taker {
-        storage.taker = nil
-        return taker
+      if !storage.takers.isEmpty {
+        return storage.takers.removeFirst().continuation
       }
       switch policy {
       case .unbounded:
@@ -72,15 +76,19 @@ final class ChannelCore<Value: Sendable>: Sendable {
     }
   }
 
-  /// 次の値を待つ。閉じられて空になったら `nil` を返す。受け取り側は 1 つだけであること。
+  /// 次の値を待つ。閉じられて空になったら `nil` を返す。
   func take() async throws -> Value? {
-    try await withTaskCancellationHandler {
+    let id = storage.withLock { storage in
+      defer { storage.nextTakerID += 1 }
+      return storage.nextTakerID
+    }
+    return try await withTaskCancellationHandler {
       try await withCheckedThrowingContinuation { continuation in
         let outcome = storage.withLock { storage -> TakeOutcome in
           if !storage.buffer.isEmpty { return .value(storage.buffer.removeFirst()) }
           if storage.isClosed { return .value(nil) }
           guard !Task.isCancelled else { return .cancelled }
-          storage.taker = continuation
+          storage.takers.append((id, continuation))
           return .waiting
         }
         switch outcome {
@@ -90,9 +98,10 @@ final class ChannelCore<Value: Sendable>: Sendable {
         }
       }
     } onCancel: {
+      // ほかの受け取り側を外さないよう、自分の ID の待機だけを外す。
       let taker = storage.withLock { storage -> CheckedContinuation<Value?, any Error>? in
-        defer { storage.taker = nil }
-        return storage.taker
+        guard let index = storage.takers.firstIndex(where: { $0.id == id }) else { return nil }
+        return storage.takers.remove(at: index).continuation
       }
       if let taker {
         activity.begin()
@@ -103,18 +112,19 @@ final class ChannelCore<Value: Sendable>: Sendable {
 
   /// チャネルを閉じる。溜まっている値は受け取れる。待っている受け取り側には `nil` を渡す。
   func close() {
-    let (taker, onClose) = storage.withLock {
-      storage -> (CheckedContinuation<Value?, any Error>?, (@Sendable () -> Void)?) in
-      guard !storage.isClosed else { return (nil, nil) }
+    let (takers, onClose) = storage.withLock {
+      storage -> ([CheckedContinuation<Value?, any Error>], (@Sendable () -> Void)?) in
+      guard !storage.isClosed else { return ([], nil) }
       storage.isClosed = true
+      // 受け取り側が待っているのはバッファが空のときだけなので、待っている全員に nil を渡してよい。
       defer {
-        storage.taker = nil
+        storage.takers = []
         storage.onClose = nil
       }
-      return (storage.buffer.isEmpty ? storage.taker : nil, storage.onClose)
+      return (storage.takers.map(\.continuation), storage.onClose)
     }
     onClose?()
-    if let taker {
+    for taker in takers {
       activity.begin()
       taker.resume(returning: nil)
     }

@@ -4,7 +4,7 @@ import Testing
 @testable import Saga
 @testable import SagaTesting
 
-private enum Action: Sendable, Equatable {
+private enum Action: Sendable, Hashable {
   case request(Int)
   case handled(Int)
   case event(String)
@@ -151,6 +151,58 @@ private func makeTester(_ saga: Saga<Int, Action>) -> SagaTester<Int, Action> {
     }
     try tester.receive(.event("x"))
     try tester.receive(.closed)
+    try await tester.finish()
+  }
+}
+
+@Suite struct ChannelWorkerPoolTests {
+  @Test func severalSagasCanShareOneChannelAndEachValueGoesToOneOfThem() async throws {
+    let tester = makeTester(
+      Saga { ctx in
+        let requests = ctx.actionChannel(request)
+        // 3 つのワーカーで 1 つのチャネルを読む（ワーカープール）。
+        for worker in 1...3 {
+          ctx.fork { ctx in
+            for try await id in requests {
+              try await ctx.delay(.seconds(1))
+              await ctx.put(.handled(id * 10 + worker))
+            }
+          }
+        }
+      })
+    for id in 1...4 {
+      await tester.send(.request(id))
+    }
+    await tester.advance(by: .seconds(1))
+    // 最初の 3 件を 3 つのワーカーが 1 件ずつ並行に処理する（どのワーカーがどれを取るかは待ち始めた順）。
+    let handled = tester.unreceivedActions.compactMap { action -> Int? in
+      if case .handled(let value) = action { value } else { nil }
+    }
+    #expect(Set(handled.map { $0 / 10 }) == [1, 2, 3])
+    #expect(Set(handled.map { $0 % 10 }) == [1, 2, 3])
+    tester.skipReceivedActions()
+    await tester.advance(by: .seconds(1))
+    #expect(tester.unreceivedActions.count == 1)
+    tester.skipReceivedActions()
+    try await tester.finish()
+  }
+
+  @Test func cancellingOneWaitingSagaDoesNotRemoveTheOthers() async throws {
+    let tester = makeTester(
+      Saga { ctx in
+        let requests = ctx.actionChannel(request)
+        let first = ctx.fork { _ in _ = try await requests.take() }
+        ctx.fork { ctx in
+          if let id = try await requests.take() { await ctx.put(.handled(id)) }
+        }
+        _ = try await ctx.take(.action(.stop))
+        ctx.cancel(first)
+        _ = try await ctx.take(.action(.closed))
+      })
+    await tester.send(.stop)
+    await tester.send(.request(5))
+    try tester.receive(.handled(5))
+    await tester.send(.closed)
     try await tester.finish()
   }
 }

@@ -749,7 +749,7 @@ extension ActionPattern where Value == Action, Action: Equatable {
 ```swift
 public enum ChannelBuffer: Sendable { case unbounded, newest(Int), oldest(Int) }
 
-/// 受け取り側は 1 つの Saga だけ。AsyncSequence なので for try await で読める。
+/// 複数の Saga から読める（待ち始めた順に渡す）。AsyncSequence なので for try await で読める。
 public struct SagaChannel<Value: Sendable>: Sendable, AsyncSequence {
   public func take() async throws -> Value?   // 閉じられて空なら nil
   public func close()
