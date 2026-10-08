@@ -643,8 +643,8 @@ extension ActionPattern where Value == Action, Action: Equatable {
 | `takeLeading` | `func takeLeading<V>(_ p, _ worker) -> SagaTask` | 実行中に届いた Action は捨てる |
 | `debounce` | `func debounce<V>(_ d: Duration, _ p, _ worker) -> SagaTask` | 静かな期間の後に最後の Action で起動。起動したワーカーは後の Action でキャンセルしない |
 | `throttle` | `func throttle<V>(_ d: Duration, _ p, _ worker) -> SagaTask` | 起動後 `d` の間は最新の 1 件だけ残し、`d` の後に処理する |
-| `all` | `func all<each R>(_ ops: repeat @Sendable () async throws -> each R) async throws -> (repeat each R)` | 1 つでも失敗したら他をキャンセル |
-| `race` | `func race<each R>(_ ops: repeat @Sendable () async throws -> each R) async throws -> (repeat (each R)?)` | 最初に終わったもの以外はキャンセル。戻り値は勝者のみ非 nil |
+| `all` | `func all<each R>(_ ops: repeat @Sendable (SagaContext) async throws -> each R) async throws -> (repeat each R)` | 各処理は fork した子で、自分の ctx を受け取る。1 つでも失敗したら他をキャンセルし、エラーは呼び出し元で catch できる |
+| `race` | `func race<each R>(_ ops: repeat @Sendable (SagaContext) async throws -> each R) async throws -> (repeat (each R)?)` | 最初に終わったもの以外はキャンセル。戻り値は勝者のみ非 nil |
 | `actionChannel` | `func actionChannel<V>(_ p, buffer: ChannelBuffer) -> SagaChannel<V>` | |
 | `eventChannel` | `func eventChannel<V>(buffer:, _ subscribe:) -> SagaChannel<V>` / `func eventChannel(from: some AsyncSequence)` | |
 

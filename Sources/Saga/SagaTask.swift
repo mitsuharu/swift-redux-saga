@@ -59,6 +59,7 @@ final class SagaTaskState: Sendable {
     var cancelHandler: (@Sendable () -> Void)?
     var nextJoinerID = 0
     var joiners: [Int: Joiner] = [:]
+    var observers: [Int: @Sendable () -> Void] = [:]
     // 以下は Activity の数え方のための状態（Activity.swift を参照）。
     var liveChildren = 0
     var isBodyDone = false
@@ -162,20 +163,40 @@ final class SagaTaskState: Sendable {
     if needsUnit { acquireUnit() }
   }
 
+  /// 終わったときに呼ぶ処理を登録し、登録の ID を返す。すでに終わっていれば登録せずに `nil` を返す。
+  func addObserver(_ observer: @escaping @Sendable () -> Void) -> Int? {
+    storage.withLock { storage -> Int? in
+      guard storage.status == nil else { return nil }
+      defer { storage.nextJoinerID += 1 }
+      storage.observers[storage.nextJoinerID] = observer
+      return storage.nextJoinerID
+    }
+  }
+
+  func removeObserver(_ id: Int) {
+    _ = storage.withLock { $0.observers.removeValue(forKey: id) }
+  }
+
   /// 終わり方を確定し、join で待っている側を再開する。2 回目以降は無視して `false` を返す。
   @discardableResult
   func finish(_ status: SagaResult) -> Bool {
-    let joiners = storage.withLock { storage -> [Joiner]? in
+    let waiting = storage.withLock { storage -> ([Joiner], [@Sendable () -> Void])? in
       guard storage.status == nil else { return nil }
       storage.status = status
       storage.cancelHandler = nil
-      defer { storage.joiners = [:] }
-      return Array(storage.joiners.values)
+      defer {
+        storage.joiners = [:]
+        storage.observers = [:]
+      }
+      return (Array(storage.joiners.values), Array(storage.observers.values))
     }
-    guard let joiners else { return false }
+    guard let (joiners, observers) = waiting else { return false }
     for joiner in joiners {
       if joiner.fromSaga { activity.begin() }
       Self.resume(joiner.continuation, with: status)
+    }
+    for observer in observers {
+      observer()
     }
     // join している側を数えてから手放す。
     let holdsUnit = storage.withLock { storage in
