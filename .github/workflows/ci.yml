@@ -38,7 +38,8 @@ env:
   # （Xcode 26.6 / Swift 6.3）。
   DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
   # 同じ Readme で、Xcode 26.6 にインストール済みと確認したシミュレータ。
-  IOS_SIMULATOR: platform=iOS Simulator,name=iPhone 17,OS=26.5
+  IOS_SIMULATOR_NAME: iPhone 17
+  IOS_SIMULATOR_RUNTIME: com.apple.CoreSimulator.SimRuntime.iOS-26-5
 
 jobs:
   format:
@@ -110,12 +111,33 @@ jobs:
             -scheme "${{ steps.scheme.outputs.name }}" \
             -destination "generic/platform=iOS Simulator" \
             SWIFT_TREAT_WARNINGS_AS_ERRORS=YES
+      - name: Resolve simulator
+        id: simulator
+        if: hashFiles('Tests/**') != ''
+        run: |
+          # 名前と OS で -destination を指定しない。runner の起動直後は CoreSimulator の準備が
+          # 終わっておらず、xcodebuild がシミュレータを見つけられずに失敗することがあるため、
+          # simctl で見つかるまで待ってから UDID で指定する。
+          for i in $(seq 1 12); do
+            udid=$(xcrun simctl list devices available --json \
+              | jq -r --arg runtime "$IOS_SIMULATOR_RUNTIME" --arg name "$IOS_SIMULATOR_NAME" \
+                '.devices[$runtime][]? | select(.name == $name) | .udid' | head -n 1)
+            if [ -n "$udid" ]; then break; fi
+            echo "Waiting for the simulator ($i)..."
+            sleep 10
+          done
+          if [ -z "$udid" ]; then
+            xcrun simctl list devices available
+            echo "::error::$IOS_SIMULATOR_NAME ($IOS_SIMULATOR_RUNTIME) was not found."
+            exit 1
+          fi
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
       - name: Build and test
         if: hashFiles('Tests/**') != ''
         run: |
           xcodebuild test \
             -scheme "${{ steps.scheme.outputs.name }}" \
-            -destination "$IOS_SIMULATOR" \
+            -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}" \
             SWIFT_TREAT_WARNINGS_AS_ERRORS=YES
 
   linux:
