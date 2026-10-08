@@ -19,6 +19,8 @@ print(store.count)
 
 - ``Store``
 - ``ObservationToken``
+- ``TrackedState``
+- ``StateTrackingContext``
 
 ### Reducer と Slice
 
