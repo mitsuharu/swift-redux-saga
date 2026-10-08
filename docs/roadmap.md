@@ -47,8 +47,7 @@
 
 | # | ブランチ | 内容 |
 | --- | --- | --- |
-| 4-1 | `feature/action-channel` | `actionChannel`（バッファ方式の指定）+ テスト |
-| 4-2 | `feature/event-channel` | `eventChannel`（購読関数版、AsyncSequence 版）+ テスト |
+| 4-1 | `feature/saga-channels` | `SagaChannel`、`actionChannel`（バッファ方式の指定）、`eventChannel`（購読関数版、AsyncSequence 版）+ テスト（4-2 を統合） |
 
 ## M5: Redux Toolkit 相当
 
