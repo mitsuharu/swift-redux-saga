@@ -423,28 +423,120 @@ Saga は「コンテキストを受け取る async 関数」です。旧実装�
 ```swift
 public struct Saga<State: Sendable, Action: Sendable>: Sendable {
   public init(_ body: @escaping @Sendable (SagaContext<State, Action>) async throws -> Void)
+
+  /// 現在のコンテキストで本体を実行する（ほかの Saga の中から呼び出す場合）。
+  public func run(_ context: SagaContext<State, Action>) async throws
+
+  /// 複数の Saga を並行に実行する（内部で `all`）。
+  public static func combine(_ sagas: Saga...) -> Saga
 }
 
 /// Effect を提供する。Sendable な値型で、内部でランタイムと現在のスコープを参照する。
 public struct SagaContext<State: Sendable, Action: Sendable>: Sendable { ... }
 ```
 
-依存（UseCase など）は Saga を作る関数の引数で注入します。シングルトンは使いません。
+#### ジェネレーター関数（`function*`）との対応
+
+redux-saga ではジェネレーター関数の中で `yield` を使って Effect を返し、ミドルウェアがそれを実行します。Swift にはジェネレーターがないため、**Saga は `async` 関数として書き、Effect は `SagaContext` のメソッドを `await` で直接呼びます**。`yield` が `await` に置き換わるイメージです。
+
+```js
+// redux-saga
+function* fetchUser(action) {
+  try {
+    const user = yield call(api.fetchUser, action.payload.id)
+    yield put({ type: 'user/fetched', payload: user })
+  } catch (e) {
+    yield put({ type: 'user/failed', payload: e.message })
+  }
+}
+
+function* rootSaga() {
+  yield takeLatest('user/fetch', fetchUser)
+}
+```
 
 ```swift
-func appSaga(fetchUser: FetchUserUseCase) -> Saga<AppState, AppAction> {
-  Saga { ctx in
-    ctx.takeLatest(.case { if case .user(.fetch(let id)) = $0 { id } else { nil } }) { ctx, id in
-      do {
-        let user = try await ctx.call(fetchUser.execute, id)
-        await ctx.put(.user(.fetched(user)))
-      } catch {
-        await ctx.put(.user(.failed(error.localizedDescription)))
-      }
-    }
+// swift-redux-saga
+func fetchUser(_ ctx: AppSagaContext, id: User.ID) async throws {
+  do {
+    let user = try await ctx.call(fetchUserUseCase.execute, id)
+    await ctx.put(.user(.fetched(user)))
+  } catch {
+    await ctx.put(.user(.failed(error.localizedDescription)))
   }
 }
 ```
+
+| redux-saga | swift-redux-saga |
+| --- | --- |
+| `function* saga() { ... }` | `func saga(_ ctx: SagaContext<State, Action>) async throws { ... }` |
+| `yield take(...)` / `yield put(...)` | `try await ctx.take(...)` / `await ctx.put(...)` |
+| `yield call(fn, a, b)` | `try await ctx.call(fn, a, b)`（`try await fn(a, b)` と直接書いてもよい） |
+| `const v = yield select(selector)` | `let v = await ctx.select(selector)` |
+| `try { } finally { if (yield cancelled()) { } }` | `do { } catch is CancellationError { }` / `ctx.isCancelled` |
+| ワーカーの引数 `action` | パターンで取り出した値（`id` など）。Action 全体を受け取らない |
+
+#### Effect をトップレベル関数にしない
+
+旧実装では `take` / `put` / `call` などをトップレベル関数として提供していました。新実装では Effect は **`SagaContext` のメソッド**にします。
+
+トップレベル関数を採らない理由:
+
+- `take` / `call` / `select` / `all` / `race` / `delay` / `cancel` は一般的な名前で、利用側やほかのモジュールの関数と衝突しやすい。
+- どのランタイム（どの Store）に対する Effect かを関数が知る手段がなく、旧実装ではグローバルな `Bridge.shared` が必要になった。タスクローカル値で渡す方法もあるが、Saga の外で呼んだときにコンパイルエラーにできない。
+- `State` / `Action` の型を呼び出しごとに推論させる必要があり、型推論が重く、エラーメッセージも分かりにくい。
+- `ctx.` と打てば使える Effect が補完で一覧できる。
+
+`enum` で名前空間を区切る案（`Effects.take(...)`）も、2 つ目と 3 つ目の問題が残るため採りません。
+
+#### Saga の定義のまとめ方
+
+Saga 自体もトップレベル関数にせず、機能ごとに型にまとめます。依存（UseCase など）があるときは、それをプロパティに持つ `struct` にします。初期化時に依存を注入でき、シングルトンを使わずに済みます。
+
+```swift
+typealias AppSagaContext = SagaContext<AppState, AppAction>
+
+struct UserSagas: Sendable {
+  let fetchUserUseCase: FetchUserUseCase   // Domain の型。本ライブラリに依存しない
+
+  /// この機能のルート Saga。
+  var root: Saga<AppState, AppAction> {
+    Saga { ctx in
+      ctx.takeLatest(.case { if case .user(.fetch(let id)) = $0 { id } else { nil } }) { ctx, id in
+        try await fetchUser(ctx, id: id)
+      }
+    }
+  }
+
+  func fetchUser(_ ctx: AppSagaContext, id: User.ID) async throws {
+    do {
+      let user = try await ctx.call(fetchUserUseCase.execute, id)
+      await ctx.put(.user(.fetched(user)))
+    } catch {
+      await ctx.put(.user(.failed(error.localizedDescription)))
+    }
+  }
+}
+
+// アプリ本体（組み立て）
+let userSagas = UserSagas(fetchUserUseCase: LiveFetchUserUseCase(api: apiClient))
+sagaMiddleware.run(Saga { ctx in
+  try await ctx.all(
+    { try await userSagas.root.run(ctx) },
+    { try await todoSagas.root.run(ctx) }
+  )
+})
+```
+
+依存のない Saga は、`case` のない `enum` を名前空間にして `static` メンバーとして定義してもかまいません。
+
+```swift
+enum CounterSagas {
+  static var root: Saga<AppState, AppAction> { ... }
+}
+```
+
+`Saga` 型には、複数の Saga をまとめる `Saga.combine(_:)`（内部で `all` を使う）も用意し、上の組み立てを `Saga.combine(userSagas.root, todoSagas.root)` と書けるようにします。
 
 ### 6.4 Action のマッチング
 
@@ -582,7 +674,7 @@ Swift にはジェネレーターがないため、redux-saga の「Effect を 1
   let tester = SagaTester(
     initialState: AppState(),
     reducer: appReducer,
-    saga: appSaga(fetchUser: .stub(User(id: 1))),
+    saga: UserSagas(fetchUserUseCase: StubFetchUserUseCase(User(id: 1))).root,
     clock: clock
   )
 
