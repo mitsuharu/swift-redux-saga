@@ -1,4 +1,5 @@
-#if canImport(UIKit)
+// watchOS の UIKit には UIAction や UIViewController がないため対象外にする。
+#if canImport(UIKit) && !os(watchOS)
   import ObjectiveC
   import Redux
   import UIKit
