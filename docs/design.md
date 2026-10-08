@@ -149,9 +149,10 @@ Redux ◀── ReduxSaga ──▶ Saga
 利用側への注意（README とドキュメントコメントに記載）:
 
 - default MainActor isolation のモジュールで定義した型は暗黙に `@MainActor` になり、`Equatable` などの準拠も MainActor 隔離になる（SE-0470）。Saga はメインアクター外で動くため、**Action / State は `nonisolated` を付けて宣言する**ことを推奨する。
+- グローバル変数に置いた reducer も暗黙に `@MainActor` になる。Saga やテストなどメインアクター外から使う場合は `nonisolated let` で宣言する。
 - 推奨構成（[11 章](#11-ロックイン回避)）では、Action / Reducer / Saga を置く `AppFeature` ターゲットは default isolation を使わない。
 
-CI では、`.defaultIsolation(MainActor.self)` を設定したテストターゲットと、設定しないテストターゲットの両方で同じ利用コードをコンパイル・実行します。
+CI では、`.defaultIsolation(MainActor.self)` を設定したテストターゲット `DefaultIsolationTests` で利用コードをコンパイル・実行します（ほかのテストターゲットは default isolation を設定しない）。
 
 ---
 
