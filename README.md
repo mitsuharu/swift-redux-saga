@@ -268,10 +268,11 @@ Examples/
 
 - [設計書](docs/design.md)
 - [ロードマップ](docs/roadmap.md)
+- [ReSwift / ReSwift-Saga からの移行ガイド](docs/migration.md)
 
 ## 背景
 
-作者が以前 [ReSwift の拡張として実装した Saga](https://github.com/mitsuharu/ReSwift-Saga)（[解説記事](https://qiita.com/mitsuharu_e/items/c2f7893a2c974dd5fc77)）を、Redux 本体も含めて Swift 6 向けに作り直すプロジェクトです。旧実装からの変更点は[設計書 13 章](docs/design.md#13-旧実装reswift-sagaからの変更点)を参照してください。
+作者が以前 [ReSwift の拡張として実装した Saga](https://github.com/mitsuharu/ReSwift-Saga)（[解説記事](https://qiita.com/mitsuharu_e/items/c2f7893a2c974dd5fc77)）を、Redux 本体も含めて Swift 6 向けに作り直すプロジェクトです。旧実装からの変更点は[設計書 13 章](docs/design.md#13-旧実装reswift-sagaからの変更点)、ReSwift / ReSwift-Saga からの移行は[移行ガイド](docs/migration.md)を参照してください。
 
 ## ライセンス
 
