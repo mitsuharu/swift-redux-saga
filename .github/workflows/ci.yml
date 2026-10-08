@@ -5,6 +5,7 @@
 #   - macOS:  SwiftPM でのビルドとテスト
 #   - iOS:    xcodebuild で iOS シミュレータ向けのビルドとテスト
 #   - Linux:  UI に依存しないターゲットのビルドとテスト
+#   - Other platforms: tvOS / watchOS / visionOS 向けのビルド
 #   - Examples: サンプルアプリのロジック（Examples/ExampleKit）のビルドとテスト、アプリのビルド
 #
 # アクションはタグではなくコミット SHA で固定している（ルールは AGENTS.md）。
@@ -144,6 +145,25 @@ jobs:
           xcodebuild test \
             -scheme "${{ steps.scheme.outputs.name }}" \
             -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}" \
+            -skipMacroValidation
+
+  other-platforms:
+    name: Build (${{ matrix.platform }})
+    # 対応 OS としている tvOS / watchOS / visionOS でビルドできることを確かめる。
+    # テストは iOS / macOS / Linux で行うので、ここではビルドだけにして macOS runner の時間を抑える。
+    runs-on: macos-26
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [tvOS Simulator, watchOS Simulator, visionOS Simulator]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build
+        run: |
+          xcodebuild build \
+            -scheme swift-redux-saga-Package \
+            -destination "generic/platform=${{ matrix.platform }}" \
             -skipMacroValidation
 
   linux:
