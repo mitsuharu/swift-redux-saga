@@ -40,7 +40,7 @@ public struct EntityAdapter<ID: Hashable & Sendable, Entity: Sendable>: Sendable
   ///
   /// - Parameters:
   ///   - id: エンティティの ID を返す関数。キーパス（`\Todo.id`）も渡せます。
-  ///   - sortedBy: `ids` の並び順。省略すると追加した順になります。
+  ///   - areInIncreasingOrder: `ids` の並び順。省略すると追加した順になります。
   public init(
     id: @escaping @Sendable (Entity) -> ID,
     sortedBy areInIncreasingOrder: (@Sendable (Entity, Entity) -> Bool)? = nil
@@ -171,7 +171,7 @@ public struct EntityAdapter<ID: Hashable & Sendable, Entity: Sendable>: Sendable
 extension EntityAdapter where Entity: Identifiable, ID == Entity.ID {
   /// `Identifiable` なエンティティのアダプタを作ります。ID には `id` を使います。
   ///
-  /// - Parameter sortedBy: `ids` の並び順。省略すると追加した順になります。
+  /// - Parameter areInIncreasingOrder: `ids` の並び順。省略すると追加した順になります。
   public init(sortedBy areInIncreasingOrder: (@Sendable (Entity, Entity) -> Bool)? = nil) {
     self.init(id: { $0.id }, sortedBy: areInIncreasingOrder)
   }
