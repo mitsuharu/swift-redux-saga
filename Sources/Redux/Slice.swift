@@ -66,4 +66,17 @@ extension Reducer {
   ) -> Reducer {
     scope(state: state, action: action, reducer: S.reducer)
   }
+
+  /// Slice の reducer を、親の State と Action に持ち上げます（Action をキーパスで取り出す版）。
+  ///
+  /// ```swift
+  /// Reducer.slice(Counter.self, state: \.counter, action: \.counter)
+  /// ```
+  public static func slice<S: Slice>(
+    _ slice: S.Type,
+    state: WritableKeyPath<State, S.State> & Sendable,
+    action: KeyPath<Action, S.Action?> & Sendable
+  ) -> Reducer {
+    scope(state: state, action: action, reducer: S.reducer)
+  }
 }
