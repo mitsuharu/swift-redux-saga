@@ -180,6 +180,19 @@ func makeStore() -> Store<Counter.State, Counter.Action> {
 > [!IMPORTANT]
 > redux-saga の `run` はルート Saga を最初の `take` まで同期に進めますが、Swift では async 関数を同期に進められないため、`run` の直後に dispatch した Action は、まだ待ち始めていない Saga に届かないことがあります。起動時の処理はルート Saga の中に書くか（推奨）、`await sagaMiddleware.waitUntilIdle()` で待ってから dispatch してください。
 
+### dispatch とメインアクター
+
+`Store` は `@MainActor` なので、`dispatch` はコンパイラがメインアクター上での実行を保証します。メインアクター外から呼ぶときは `await` を付けます（付け忘れるとコンパイルエラーになります）。
+
+```swift
+Task.detached {
+  let value = try await api.fetch()
+  await store.dispatch(.loaded(value))   // メインアクターで実行される
+}
+```
+
+非同期の処理の結果を Store に反映する場合は、Saga の `put` を使うのがおすすめです。
+
 ### SwiftUI
 
 `store.count` のように State のプロパティを直接読むと、そのプロパティが変わったときだけ再描画されます。
