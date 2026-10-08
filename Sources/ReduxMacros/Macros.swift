@@ -47,3 +47,32 @@ public macro ActionCases() = #externalMacro(module: "ReduxMacrosPlugin", type: "
 @attached(member, names: named(initialState))
 @attached(memberAttribute)
 public macro Slice() = #externalMacro(module: "ReduxMacrosPlugin", type: "SliceMacro")
+
+/// struct のプロパティ単位で、Observation の追跡を行えるようにします。
+///
+/// State の中にネストした struct に付けると、`store.profile.name` のように読んだとき、
+/// `profile` のほかのプロパティが変わっても通知されず、`name` が変わったときだけ通知されます。
+///
+/// ```swift
+/// @TrackedState
+/// struct Profile: Sendable, Equatable {
+///   var name: String = ""
+///   var age: Int = 0
+/// }
+/// ```
+///
+/// - 対象は型を書いた `var` の保存プロパティです（`let` や計算プロパティは対象外。計算プロパティは、中で読んだ
+///   保存プロパティが追跡されます）。
+/// - `Codable` の自動準拠を使う場合、キーが `_name` になる点に注意してください（`CodingKeys` を書いてください）。
+/// - 値全体を比較したり受け渡したりするだけでは追跡されません。読んだプロパティだけが追跡されます。
+@attached(member, names: named(_$tracking))
+@attached(extension, conformances: TrackedState)
+@attached(memberAttribute)
+public macro TrackedState() =
+  #externalMacro(module: "ReduxMacrosPlugin", type: "TrackedStateMacro")
+
+/// `@TrackedState` がプロパティに付けるマクロ。直接使わないでください。
+@attached(accessor, names: named(init), named(get), named(set))
+@attached(peer, names: prefixed(_))
+public macro TrackedProperty() =
+  #externalMacro(module: "ReduxMacrosPlugin", type: "TrackedPropertyMacro")
