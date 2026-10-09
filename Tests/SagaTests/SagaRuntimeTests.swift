@@ -238,4 +238,30 @@ private struct TestError: Error, Equatable {}
     #expect(runtime.multicaster.takerCount == 20)
     runtime.stop()
   }
+
+  @Test func waitUntilIdleReturnsWhileASagaIsInARealTimeDelay() async throws {
+    let host = makeHost()
+    let runtime = SagaRuntime(host: host, clock: ContinuousClock())
+    runtime.run(
+      Saga { ctx in
+        while true {
+          try await ctx.delay(.seconds(3600))
+        }
+      })
+    // 1 時間の delay の間に戻ることを確かめる（戻らなければテストが終わらない）。
+    await runtime.waitUntilIdle()
+    #expect(runtime.activity.running == 0)
+    runtime.stop()
+  }
+
+  @Test func cancellingARealTimeDelayKeepsTheActivityBalanced() async throws {
+    let host = makeHost()
+    let runtime = SagaRuntime(host: host, clock: ContinuousClock())
+    let task = runtime.run(Saga { ctx in try await ctx.delay(.seconds(3600)) })
+    await runtime.waitUntilIdle()
+    task.cancel()
+    await #expect(throws: CancellationError.self) { try await task.join() }
+    await runtime.waitUntilIdle()
+    #expect(runtime.activity.running == 0)
+  }
 }
