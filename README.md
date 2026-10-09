@@ -172,6 +172,35 @@ let fetch = ActionPattern<AppAction, User.ID>.case {
 let id = try await ctx.take(fetch)
 ```
 
+#### エラー処理
+
+ワーカーで処理しなかったエラーは、redux-saga と同じく fork 元に伝わります。`takeEvery` などのヘルパーはワーカーが失敗するとヘルパーごと終了し、エラーはルート Saga まで伝わって、**すべての Saga が止まります**。アプリは動き続けますが、以降の Action に Saga が反応しなくなります（エラーは `onError` に渡され、既定ではログに出ます）。
+
+失敗し得る処理は、ワーカーの中で `catch` して Action で返してください。`CancellationError`（`takeLatest` で前のワーカーが止められたときなど）はエラーとして扱いません。
+
+```swift
+ctx.takeEvery(fetch) { ctx, id in  // fetch は上の ActionPattern
+  do {
+    let user = try await ctx.call(repository.fetchUser, id)
+    await ctx.put(.fetched(user))
+  } catch is CancellationError {
+  } catch {
+    await ctx.put(.failed(error.localizedDescription))
+  }
+}
+```
+
+ワーカーが多い場合は、この `do` / `catch` を関数にまとめると書きやすくなります（[Example の `perform`](Examples/ExampleKit/Sources/AppFeature/TodoFeature.swift)）。
+
+想定外のエラーに気づけるよう、`onError` でクラッシュレポートのサービスなどに送ることもできます。
+
+```swift
+let sagaMiddleware = SagaMiddleware<AppState, AppAction>(onError: { error in
+  SagaRuntime<AppState, AppAction>.logError(error)  // 既定のログ出力
+  // error.underlying（元のエラー）と error.sagaStack（Saga の経路）を送る
+})
+```
+
 ### マクロ（ReduxMacros）
 
 `@ActionCases` を enum に付けると、case ごとに関連値を取り出すプロパティが生成され、`if case ... else nil` を書かずに済みます。`@Slice` は Slice への準拠、`initialState`、`Action` への `@ActionCases` を補います。
