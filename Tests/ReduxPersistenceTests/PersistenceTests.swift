@@ -162,3 +162,26 @@ private func makePersistence(_ storage: InMemoryStorage, version: Int = 1)
     #expect(makePersistence(storage).restore(into: AppState()).settings.theme == "dark")
   }
 }
+
+@MainActor
+@Suite struct PersistenceMemoryTests {
+  @Test func storeWithAPendingSaveIsReleased() async {
+    weak var weakStore: Store<AppState, Action>?
+    weak var weakMiddleware: PersistenceMiddleware<AppState, Action>?
+    let storage = InMemoryStorage()
+    do {
+      let middleware = PersistenceMiddleware<AppState, Action>(
+        makePersistence(storage), debounce: .seconds(100), clock: TestClock())
+      let store = Store(initialState: AppState(), reducer: reducer, middleware: [middleware])
+      weakStore = store
+      weakMiddleware = middleware
+      store.dispatch(.setTheme("dark"))  // 保存を待っている状態で手放す
+    }
+    let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+    while weakStore != nil || weakMiddleware != nil, ContinuousClock.now < deadline {
+      try? await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(weakStore == nil)
+    #expect(weakMiddleware == nil)
+  }
+}

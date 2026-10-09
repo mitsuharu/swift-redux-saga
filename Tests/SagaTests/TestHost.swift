@@ -24,6 +24,10 @@ final class TestHost<State: Sendable, Action: Sendable>: SagaHost {
     return runtime
   }
 
+  func setRuntime(_ runtime: SagaRuntime<State, Action>?) {
+    storage.withLock { $0.runtime = runtime }
+  }
+
   var dispatched: [Action] {
     storage.withLock { $0.dispatched }
   }

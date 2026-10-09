@@ -140,3 +140,18 @@ let trackedReducer = Reducer<TrackedAppState, TrackedAppAction> { state, action 
     #expect(profile.address == Address())
   }
 }
+
+@MainActor
+@Suite struct TrackedStateMemoryTests {
+  @Test func aTrackedValueKeptAfterReadingDoesNotKeepTheStoreAlive() {
+    weak var weakStore: Store<TrackedAppState, TrackedAppAction>?
+    var kept: Profile?
+    do {
+      let store = Store(initialState: TrackedAppState(), reducer: trackedReducer)
+      weakStore = store
+      kept = store.profile  // 読み取り元（Store への参照）を持った値を持ち出す
+    }
+    #expect(weakStore == nil)
+    #expect(kept?.name == "")  // Store の解放後に読んでも落ちない
+  }
+}

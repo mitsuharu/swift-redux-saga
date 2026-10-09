@@ -142,3 +142,13 @@ xcodebuild docbuild -scheme swift-redux-saga-Package -destination "generic/platf
 swift build --build-tests
 for p in 1 2 3 4; do (for i in $(seq 1 10); do swift test --skip-build 2>&1 | grep -E '✘|Fatal' ; done) & done; wait
 ```
+
+## メモリリークの確認
+
+- 解放されるべきオブジェクト（Store、Saga ランタイム、ミドルウェア、購読、テスト支援）は、`weak` 参照が `nil` になることをテストで確かめる（`MemoryTests`）。参照を持つ型を追加したら、ここにテストを足す。
+- Example は、agent-device でひととおり操作した後に `leaks` で確かめる。シミュレータ向けのビルドには `get-task-allow` が付かないため、付けて署名し直してからインストールする。
+
+```sh
+codesign -f -s - --entitlements <get-task-allow を true にした plist> <ビルドした .app>
+leaks <シミュレータで動いているアプリの pid>
+```
