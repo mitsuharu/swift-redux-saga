@@ -9,14 +9,17 @@ import Testing
 
 @MainActor
 @Suite struct TodoListViewModelTests {
-  /// ViewModel を作り、起動時の読み込みが終わるまで待つ。
+  /// ViewModel を作り、ログインして、ToDo の読み込みが終わるまで待つ。
   private func makeViewModel(storage: InMemoryStorage = InMemoryStorage()) async
-    -> (TodoListViewModel, SagaMiddleware<TodoFeature.State, TodoFeature.Action>)
+    -> (TodoListViewModel, SagaMiddleware<RootFeature.State, RootFeature.Action>)
   {
-    let useCase = TodoUseCase(repository: InMemoryTodoRepository(latency: .zero))
-    let components = AppStore.makeComponents(useCase: useCase, storage: storage)
+    let components = AppStore.makeComponents(
+      useCase: TodoUseCase(repository: InMemoryTodoRepository(latency: .zero)),
+      authUseCase: AuthUseCase(repository: InMemoryAuthRepository(latency: .zero)),
+      storage: storage)
     let (store, sagaMiddleware) = (components.store, components.sagaMiddleware)
-    // 起動時の読み込み（refresh → loaded）を待たずに操作すると、後から届いた loaded が
+    store.dispatch(.auth(.loginTapped(name: "me")))
+    // 読み込み（refresh → loaded）を待たずに操作すると、後から届いた loaded が
     // 追加した ToDo を上書きするため、Saga が止まるまで待つ。
     await sagaMiddleware.waitUntilIdle()
     return (TodoListViewModel(store: store), sagaMiddleware)

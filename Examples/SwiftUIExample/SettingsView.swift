@@ -9,7 +9,7 @@ import SwiftUI
 /// Store を直接使う。`store.count` のように読んだプロパティだけが追跡されるので、
 /// ほかのプロパティが変わってもこの画面は再描画されない。
 struct SettingsView: View {
-  @Environment(Store<TodoFeature.State, TodoFeature.Action>.self) private var store
+  @Environment(Store<RootFeature.State, RootFeature.Action>.self) private var store
 
   var body: some View {
     NavigationStack {
@@ -18,20 +18,28 @@ struct SettingsView: View {
           // 値を書き戻すだけの入力欄は store.binding で作る（設定は永続化される）。
           Toggle(
             "Show completed",
-            isOn: store.binding(\.preferences.showsCompleted, send: { .setShowsCompleted($0) })
+            isOn: store.binding(\.todo.preferences.showsCompleted) {
+              .todo(.setShowsCompleted($0))
+            }
           )
           .accessibilityIdentifier("settingsShowsCompletedToggle")
         }
         Section("Summary") {
-          LabeledContent("All", value: "\(store.todos.ids.count)")
+          LabeledContent("All", value: "\(store.todo.todos.ids.count)")
           LabeledContent(
             "Completed",
-            value: "\(store.todos.entities.values.filter(\.isDone).count)")
+            value: "\(store.todo.todos.entities.values.filter(\.isDone).count)")
         }
         Section {
-          Button("Reload") { store.dispatch(.refresh) }
-            .disabled(store.isLoading)
+          Button("Reload") { store.dispatch(.todo(.refresh)) }
+            .disabled(store.todo.isLoading)
             .accessibilityIdentifier("reloadButton")
+        }
+        Section("Account") {
+          LabeledContent("User", value: store.auth.user?.name ?? "")
+          // ログアウトすると、ToDo の Saga が止まり、一覧が消えてログイン画面に戻る。
+          Button("Log out", role: .destructive) { store.dispatch(.auth(.logoutTapped)) }
+            .accessibilityIdentifier("logoutButton")
         }
       }
       .navigationTitle("Settings")

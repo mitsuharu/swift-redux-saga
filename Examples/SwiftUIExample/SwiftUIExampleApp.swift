@@ -20,20 +20,33 @@ struct SwiftUIExampleApp: App {
 
   var body: some Scene {
     WindowGroup {
-      TabView {
-        // MVVM を経由する画面: View は ViewModel だけを見る。ViewModel が Store を読む。
-        TodoListView(viewModel: TodoListViewModel(store: app.store))
-          .tabItem { Label("ToDo", systemImage: "checklist") }
-        // Store を直接使う画面: 画面特有の状態がない単純な画面は、Store を直接読んで dispatch する。
-        SettingsView()
-          .tabItem { Label("Settings", systemImage: "gear") }
-      }
-      .store(app.store)
+      RootView(store: app.store)
+        .store(app.store)
     }
     .onChange(of: scenePhase) { _, phase in
       // 設定は少し待ってから保存するため、その間に終了されないよう、バックグラウンドに入ったらすぐ保存する。
       if phase == .background {
         Task { await app.flush() }
+      }
+    }
+  }
+}
+
+/// ログインしていなければログイン画面を、していれば ToDo と設定のタブを表示する。
+private struct RootView: View {
+  let store: Store<RootFeature.State, RootFeature.Action>
+
+  var body: some View {
+    if store.auth.user == nil {
+      LoginView()
+    } else {
+      TabView {
+        // MVVM を経由する画面: View は ViewModel だけを見る。ViewModel が Store を読む。
+        TodoListView(viewModel: TodoListViewModel(store: store))
+          .tabItem { Label("ToDo", systemImage: "checklist") }
+        // Store を直接使う画面: 画面特有の状態がない単純な画面は、Store を直接読んで dispatch する。
+        SettingsView()
+          .tabItem { Label("Settings", systemImage: "gear") }
       }
     }
   }

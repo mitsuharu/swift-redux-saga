@@ -134,11 +134,14 @@ private func makeStore(_ todos: [Todo] = [milk, bread]) -> TestStore<
 /// 保存に時間がかかる間に続けて操作した場合。
 @MainActor
 @Suite struct TodoConsecutiveEditTests {
-  /// 保存に時間がかかるリポジトリで Store を作り、起動時の読み込みが終わるまで待つ。
+  /// 保存に時間がかかるリポジトリで Store を作り、ログインして、読み込みが終わるまで待つ。
   private func makeComponents(_ todos: [Todo]) async -> AppStore.Components {
-    let useCase = TodoUseCase(
-      repository: InMemoryTodoRepository(todos: todos, latency: .milliseconds(20)))
-    let components = AppStore.makeComponents(useCase: useCase, storage: InMemoryStorage())
+    let components = AppStore.makeComponents(
+      useCase: TodoUseCase(
+        repository: InMemoryTodoRepository(todos: todos, latency: .milliseconds(20))),
+      authUseCase: AuthUseCase(repository: InMemoryAuthRepository(latency: .zero)),
+      storage: InMemoryStorage())
+    components.store.dispatch(.auth(.loginTapped(name: "me")))
     await components.sagaMiddleware.waitUntilIdle()
     return components
   }
@@ -146,17 +149,17 @@ private func makeStore(_ todos: [Todo] = [milk, bread]) -> TestStore<
   @Test func togglingTheSameTodoTwiceWhileSavingEndsWhereItStarted() async {
     let components = await makeComponents([milk])
     // 1 回目の保存が終わる前に 2 回目を押す。
-    components.store.dispatch(.toggleTapped(milk.id))
-    components.store.dispatch(.toggleTapped(milk.id))
+    components.store.dispatch(.todo(.toggleTapped(milk.id)))
+    components.store.dispatch(.todo(.toggleTapped(milk.id)))
     await components.sagaMiddleware.waitUntilIdle()
-    #expect(components.store.todos.entities[milk.id]?.isDone == false)
+    #expect(components.store.todo.todos.entities[milk.id]?.isDone == false)
   }
 
   @Test func addingWhileAnotherAddIsSavingKeepsBoth() async {
     let components = await makeComponents([])
-    components.store.dispatch(.add(title: "eggs"))
-    components.store.dispatch(.add(title: "tea"))
+    components.store.dispatch(.todo(.add(title: "eggs")))
+    components.store.dispatch(.todo(.add(title: "tea")))
     await components.sagaMiddleware.waitUntilIdle()
-    #expect(TodoFeature.visibleTodos(components.store.state).map(\.title) == ["eggs", "tea"])
+    #expect(TodoFeature.visibleTodos(components.store.todo).map(\.title) == ["eggs", "tea"])
   }
 }
