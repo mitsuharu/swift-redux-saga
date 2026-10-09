@@ -88,6 +88,7 @@ extension SagaContext {
     // 処理の本体だけを do / catch で囲まないのは、処理の中で fork した子の失敗が本体を通らずに伝わるため。
     fork(
       Saga(name) { ctx in branch.finish(.success(try await branch.operation(ctx))) },
+      in: environment,
       waitsForFirstEffect: true,
       onFailure: { branch.finish(.failure($0)) })
   }
@@ -114,7 +115,7 @@ extension SagaContext {
     if let finished = candidates.sorted().first(where: { !tasks[$0].isRunning }) {
       return finished
     }
-    let activity = runtime.activity
+    let activity = engine.activity
     let gate = Locked<CheckedContinuation<Int, any Error>?>(nil)
     // 待機を 1 回だけ取り出す。最初に終わった子とキャンセルのうち、先に来た方だけが再開する。
     let takeGate: @Sendable () -> CheckedContinuation<Int, any Error>? = {

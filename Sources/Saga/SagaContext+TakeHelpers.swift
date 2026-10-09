@@ -7,8 +7,8 @@ extension SagaContext {
   func subscribe<Value>(
     _ pattern: ActionPattern<Action, Value>, buffer: ChannelBuffer
   ) -> ChannelCore<Value> {
-    let channel = ChannelCore<Value>(buffer: buffer, activity: runtime.activity)
-    let unsubscribe = runtime.multicaster.subscribe { action in
+    let channel = ChannelCore<Value>(buffer: buffer, activity: engine.activity)
+    let unsubscribe = environment.actions.subscribe { action in
       if let value = pattern.match(action) { channel.put(value) }
     }
     channel.onClose(unsubscribe)
@@ -27,7 +27,7 @@ extension SagaContext {
         try await handle(ctx, value)
       }
     }
-    let task = fork(loop, waitsForFirstEffect: false)
+    let task = fork(loop, in: environment, waitsForFirstEffect: false)
     // 呼び出し元が終わった後に fork された場合、子は動かないのでここで閉じる。
     if !task.isRunning { channel.close() }
     return task

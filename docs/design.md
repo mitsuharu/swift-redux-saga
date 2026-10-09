@@ -897,11 +897,10 @@ runtime.run(todoSagas.root, state: \.todo, action: \.todo, embed: AppAction.todo
 let session = ctx.fork(todoSagas.root, state: \.todo, action: \.todo, embed: AppAction.todo)
 ```
 
-- 接続ごとに子の `SagaRuntime<ChildState, ChildAction>` を作る。子の Host は親の Host を通して、`state` で子の State を読み、`embed` で包んだ親の Action を発行する。
-- 親のランタイムは、届いた Action を `action` で取り出して子に emit する。子の Saga が終わったら届けるのをやめ、子のランタイムを手放す。
-- 子のランタイムは親と `Activity` と ID の連番を共有する。親の `waitUntilIdle()` / テストの `settle()` が子の Saga も待ち、モニタで ID が重ならないようにするため。
-- 親の `stop()` で子も止める。未処理のエラーは親の `onError` に渡す。`ctx.fork` で接続した子のエラーは、呼び出し元には伝えない（子の根で `onError` に渡し済みで、伝えると二重に報告されるため）。
-- `SagaContext` を子の型に変換する方式（1 つのランタイムで型を付け替える）は採らない。`SagaContext` はランタイムの具体型を持ち、Effect の実装すべてに型の変換が必要になるため。
+- ランタイムは分けず、1 つのランタイムの中で、Saga から見た State・Action の読み書きの相手（環境）だけを子の型に付け替える。子の Host は親の Host を通して `state` で子の State を読み、`embed` で包んだ親の Action を発行する。子の `take` / 購読は、親の Action の配信から `action` で取り出したものを受け取る。
+- そのため、scope を通しても通さなくても、fork / spawn / キャンセル / join / エラーの伝わり方は同じになる。子が `spawn` した Saga もランタイムの根として管理され、`stop()` で止まり、Action を受け取り続ける。`ctx.fork` で接続した子の失敗は、通常の `fork` と同じく呼び出し元に伝わり、呼び出し元の `join` は子の後始末が終わるまで戻らない。
+- `SagaContext` はランタイムの具体型を持たず、State・Action に依存しない実行の仕組み（`SagaEngine`: 子の起動、終わり方の確定、Activity、時計、モニタ）と、型付きの環境を持つ。
+- 接続ごとに子のランタイムを作る方式は採らない（最初の実装はこの方式だった）。子のランタイムの寿命を別に管理する必要があり、子の根が終わった後の `spawn` が管理から外れる、`fork` の終わり方と子の後始末がずれる、などの食い違いが起きたため。
 
 ---
 

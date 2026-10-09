@@ -16,7 +16,7 @@ import InternalPrimitives
 /// ```
 ///
 /// Redux の Store で使う場合は、`ReduxSaga` モジュールの `SagaMiddleware` がランタイムを作って管理します。
-public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
+public final class SagaRuntime<State: Sendable, Action: Sendable>: SagaEngine {
   let host: any SagaHost<State, Action>
   let clock: any Clock<Duration>
   let monitor: (any SagaMonitor)?
@@ -24,17 +24,7 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
   package let activity: Activity
   let multicaster: ActionMulticaster<Action>
   private let rootTasks = Locked(RootTasks())
-  let nextID: Locked<Int>
-  private let nextScopeID = Locked(0)
-  /// 接続した子のランタイム（`run(_:state:action:embed:)`）。キーは接続ごとの番号。
-  let scopes = Locked<[Int: ScopedRuntime]>([:])
-
-  /// 接続した子のランタイムに、Action を届けたり止めたりする関数。
-  struct ScopedRuntime: Sendable {
-    let emit: @Sendable (Action) -> Void
-    let stop: @Sendable () -> Void
-  }
-
+  private let nextID = Locked(0)
   private let startup = Locked(Startup())
 
   private struct RootTasks {
@@ -62,38 +52,25 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
   ///   - monitor: Saga の起動・終了・Effect を受け取るフック。
   ///   - onError: 根（``run(_:)`` や `spawn` で起動した Saga）まで伝わった未処理のエラーを受け取る関数。
   ///     既定ではログに出力します。
-  public convenience init<Host: SagaHost>(
+  public init<Host: SagaHost>(
     host: Host,
     clock: any Clock<Duration> = ContinuousClock(),
     monitor: (any SagaMonitor)? = nil,
     onError: @escaping @Sendable (SagaError) -> Void = SagaRuntime.logError
   ) where Host.State == State, Host.Action == Action {
-    self.init(
-      host: host, clock: clock, monitor: monitor, onError: onError,
-      activity: Activity(), nextID: Locked(0))
-  }
-
-  /// 親のランタイムと Activity と ID の連番を共有して作る（子のランタイム用）。
-  ///
-  /// Activity を共有するのは、親の ``waitUntilIdle()`` やテストの `settle()` が子の Saga も待つため。
-  /// ID の連番を共有するのは、モニタで親子の Saga の ID が重ならないため。
-  init(
-    host: any SagaHost<State, Action>,
-    clock: any Clock<Duration>,
-    monitor: (any SagaMonitor)?,
-    onError: @escaping @Sendable (SagaError) -> Void,
-    activity: Activity,
-    nextID: Locked<Int>
-  ) {
     self.host = host
     self.clock = clock
     self.monitor = monitor
     self.onError = onError
-    self.activity = activity
-    self.nextID = nextID
+    self.activity = Activity()
     self.multicaster = ActionMulticaster(activity: activity)
     // ランタイムは Activity を所有しているため、弱参照にして循環させない。
     activity.onIdle { [weak self] in self?.deliverStartupActions() }
+  }
+
+  /// このランタイムの State・Action のままの環境。
+  var rootEnvironment: SagaEnvironment<State, Action> {
+    SagaEnvironment(host: host, actions: multicaster)
   }
 
   /// 未処理のエラーをログに出力します（`onError` の既定値）。
@@ -133,12 +110,9 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
     }
   }
 
-  /// Action を、待っている Saga と、接続した子のランタイムに届ける。
+  /// Action を、待っている Saga に届ける。子の型に付け替えた Saga にも、この配信から届く。
   private func deliver(_ action: Action) {
     multicaster.emit(action)
-    for scope in scopes.withLock({ Array($0.values) }) {
-      scope.emit(action)
-    }
   }
 
   /// Saga が、待つ Effect（`take` / `put` / `call` など）か終わりに達したことを記録する。
@@ -190,16 +164,20 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
   /// 最初の呼び出しから Saga がはじめて Effect で止まるまでに ``emit(_:)`` した Action は、止まった時点で届けます。
   @discardableResult
   public func run(_ saga: Saga<State, Action>) -> SagaTask {
+    run(saga, in: rootEnvironment)
+  }
+
+  /// Saga を根として起動する。最初の呼び出しなら、起動中の Action を溜め始める。
+  func run<S, A>(_ saga: Saga<S, A>, in environment: SagaEnvironment<S, A>) -> SagaTask {
     startup.withLock { startup in
       guard !startup.hasStarted else { return }
       startup.hasStarted = true
       startup.isBuffering = true
     }
-    return start(saga)
+    return start(saga, in: environment)
   }
 
-  /// Saga を根として起動する（`run` と `spawn`）。
-  func start(_ saga: Saga<State, Action>) -> SagaTask {
+  func start<S, A>(_ saga: Saga<S, A>, in environment: SagaEnvironment<S, A>) -> SagaTask {
     let state = makeTaskState(waitsForFirstEffect: true)
     let task = SagaTask(state: state)
     let isStopped = rootTasks.withLock { rootTasks -> Bool in
@@ -216,7 +194,7 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
     // ここだけ非構造化の Task を使うのは、Saga の木の根であり、親になるタスクが存在しないため。
     // 根より下（fork）はすべてタスクグループの子タスクとして動く。
     let handle = Task {
-      await self.runRoot(saga, state: state)
+      await self.runRoot(saga, in: environment, state: state)
       _ = self.rootTasks.withLock { $0.tasks.remove(task) }
     }
     state.onCancel { handle.cancel() }
@@ -232,18 +210,8 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
     await activity.waitUntilIdle()
   }
 
-  /// 起動したすべての Saga をキャンセルします。以降に ``run(_:)`` した Saga はすぐにキャンセルされます。
-  func makeScopeID() -> Int {
-    nextScopeID.withLock { id in
-      defer { id += 1 }
-      return id
-    }
-  }
-
-  var isStopped: Bool {
-    rootTasks.withLock { $0.isStopped }
-  }
-
+  /// 起動したすべての Saga（子の型で起動したものや、`spawn` したものを含む）をキャンセルします。
+  /// 以降に ``run(_:)`` した Saga はすぐにキャンセルされます。
   public func stop() {
     let tasks = rootTasks.withLock { rootTasks -> Set<SagaTask> in
       rootTasks.isStopped = true
@@ -252,9 +220,6 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
     }
     for task in tasks {
       task.cancel()
-    }
-    for scope in scopes.withLock({ Array($0.values) }) {
-      scope.stop()
     }
   }
 
@@ -273,115 +238,15 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
     return SagaTaskState(id: id, activity: activity)
   }
 
+  func report(_ error: SagaError) {
+    onError(error)
+  }
+
   func finish(_ state: SagaTaskState, _ result: SagaResult) {
     sagaDidReachEffect(state.id)
     // join で待っている側より先にモニタに通知する。join から戻った時点で通知が終わっているようにするため。
     state.finish(result) {
       monitor?.sagaFinished(state.id, result: result)
     }
-  }
-
-  private func runRoot(_ saga: Saga<State, Action>, state: SagaTaskState) async {
-    do {
-      try await runScoped(saga, state: state)
-      // キャンセルを受けた Saga が CancellationError を catch して正常に終わっても、キャンセルとして扱う
-      // （redux-saga と同じ）。join する側が、止めたはずの Saga を完了と誤解しないため。
-      finish(state, state.isCancelRequested ? .cancelled : .completed)
-    } catch {
-      if error is CancellationError || state.isCancelRequested {
-        finish(state, .cancelled)
-      } else {
-        let error = error as? SagaError ?? SagaError.propagating(error, through: saga.name)
-        // 終わり方を確定する前に報告する。確定すると Activity の後始末の分が手放され、
-        // settle() が報告より先に戻ってしまうため。
-        onError(error)
-        finish(state, .failed(error.underlying))
-      }
-    }
-  }
-
-  /// Saga の本体を、子（fork）を持てるスコープの中で実行する。
-  ///
-  /// 本体と子はすべて 1 つのタスクグループの子タスクになるため、親のキャンセルは子に伝わり、
-  /// 子の失敗は兄弟と本体をキャンセルして親に伝わる。本体が終わっても、子がすべて終わるまで戻らない。
-  /// 呼び出し側で本体の分の `activity.begin()` 済みであること。
-  ///
-  /// 本体か子が失敗したら、この Saga を経路に加えた ``SagaError`` を投げる。
-  func runScoped(_ saga: Saga<State, Action>, state: SagaTaskState) async throws {
-    let forks = ForkQueue<ForkRequest>()
-    let context = SagaContext(runtime: self, forks: forks, task: state)
-    do {
-      try await withThrowingDiscardingTaskGroup { group in
-        group.addTask {
-          defer {
-            forks.close()
-            state.bodyDidFinish()
-          }
-          try await saga.run(context)
-        }
-        while let request = await forks.next() {
-          group.addTask { try await request.run() }
-        }
-      }
-    } catch is CancellationError {
-      throw CancellationError()
-    } catch {
-      throw SagaError.propagating(error, through: saga.name)
-    }
-  }
-
-  /// fork された子を実行する。
-  ///
-  /// 子が失敗したらエラーを投げ、親のタスクグループを失敗させる（兄弟と親がキャンセルされる）。
-  /// 子がキャンセルされた場合（個別のキャンセル、親からのキャンセル）はエラーを投げない。
-  ///
-  /// `onFailure` を渡すと、失敗を親に伝えずに、元のエラーを `onFailure` に渡す（`all` / `race` が使う）。
-  /// 子の終わり方を確定する前に呼ぶので、終わりを待っている側は渡したエラーを読める。
-  func runForked(
-    _ saga: Saga<State, Action>, state: SagaTaskState, parent: SagaTaskState,
-    onFailure: (@Sendable (any Error) -> Void)? = nil
-  ) async throws {
-    let signal = CancelSignal()
-    state.onCancel { signal.fire() }
-    do {
-      try await withThrowingTaskGroup(of: Bool.self) { group in
-        group.addTask {
-          try await self.runScoped(saga, state: state)
-          return true
-        }
-        group.addTask {
-          await signal.wait()
-          return false
-        }
-        // 合図（個別のキャンセル）か親のキャンセルで待機が先に終わったら、本体をキャンセルして本体の結果を待つ。
-        // 本体の結果を待たずに抜けると、本体の CancellationError がタスクグループに捨てられ、完了と区別できないため。
-        let bodyFinishedFirst = try await group.next() ?? true
-        group.cancelAll()
-        if !bodyFinishedFirst {
-          _ = try await group.next()
-        }
-      }
-      parent.childDidFinish(failed: false)
-      finish(state, state.isCancelRequested || Task.isCancelled ? .cancelled : .completed)
-    } catch {
-      if error is CancellationError || state.isCancelRequested || Task.isCancelled {
-        parent.childDidFinish(failed: false)
-        finish(state, .cancelled)
-      } else if let onFailure {
-        let underlying = (error as? SagaError)?.underlying ?? error
-        onFailure(underlying)
-        parent.childDidFinish(failed: false)
-        finish(state, .failed(underlying))
-      } else {
-        parent.childDidFinish(failed: true)
-        finish(state, .failed((error as? SagaError)?.underlying ?? error))
-        throw error
-      }
-    }
-  }
-
-  /// スコープに子の起動を要求する。
-  struct ForkRequest: Sendable {
-    let run: @Sendable () async throws -> Void
   }
 }
