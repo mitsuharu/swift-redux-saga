@@ -26,7 +26,7 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
   private let rootTasks = Locked(RootTasks())
   private let nextID: Locked<Int>
   private let nextScopeID = Locked(0)
-  /// 接続した子のランタイム（``run(_:state:action:embed:)``）。キーは接続ごとの番号。
+  /// 接続した子のランタイム（`run(_:state:action:embed:)`）。キーは接続ごとの番号。
   let scopes = Locked<[Int: ScopedRuntime]>([:])
 
   /// 接続した子のランタイムに、Action を届けたり止めたりする関数。

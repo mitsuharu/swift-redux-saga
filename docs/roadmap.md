@@ -108,3 +108,20 @@
 | 11-6 | `docs/review` | ドキュメントの見直し、プロダクトを用途ごとに使えるようにする （[#46](https://github.com/mitsuharu/swift-redux-saga/pull/46)） |
 | 11-8 | `feature/example-direct-store` | Example に Store を直接使う画面を追加し、MVVM 経由と並べる （[#47](https://github.com/mitsuharu/swift-redux-saga/pull/47)） |
 | 11-7 | `docs/release-0.1.0` | 0.1.0 のリリース（CHANGELOG、README のインストール手順） |
+
+## M12: 実用面の見直し
+
+| # | ブランチ | 内容 |
+| --- | --- | --- |
+| 12-1 | `test/memory-leaks` | メモリリークのテスト、`SagaTester` の循環参照の修正 （[#50](https://github.com/mitsuharu/swift-redux-saga/pull/50)） |
+| 12-2 | `fix/wait-until-idle-real-clock` | 実時間の `delay` の間も `waitUntilIdle()` が戻る （[#52](https://github.com/mitsuharu/swift-redux-saga/pull/52)） |
+| 12-3 | `fix/persistence-save-order` | 永続化の保存の順序、バックグラウンドに入るときの保存 （[#53](https://github.com/mitsuharu/swift-redux-saga/pull/53)、[#57](https://github.com/mitsuharu/swift-redux-saga/pull/57)） |
+| 12-4 | `fix/startup-actions` | 起動直後に dispatch した Action を、Saga が動き出すまで溜めて届ける （[#54](https://github.com/mitsuharu/swift-redux-saga/pull/54)） |
+| 12-5 | `docs/saga-error-handling` | README に Saga のエラー処理の節 （[#55](https://github.com/mitsuharu/swift-redux-saga/pull/55)） |
+| 12-6 | `fix/saga-cancellation-and-errors` | `call` のキャンセル後の結果とエラー、`all` / `race` のエラーとキャンセル、`eventChannel` のエラー （[#56](https://github.com/mitsuharu/swift-redux-saga/pull/56)、[#59](https://github.com/mitsuharu/swift-redux-saga/pull/59)） |
+| 12-7 | `fix/observation-token-and-entity-id` | 購読の解除でハンドラを手放す、エンティティの ID の重複 （[#58](https://github.com/mitsuharu/swift-redux-saga/pull/58)） |
+| 12-8 | `fix/example-sequential-edits` | Example で、保存中の連続操作で変更を失わない （[#60](https://github.com/mitsuharu/swift-redux-saga/pull/60)） |
+| 12-9 | `feature/identified-access` | 一覧の要素を ID で読み書きする添字、Optional の値の Binding （[#61](https://github.com/mitsuharu/swift-redux-saga/pull/61)） |
+| 12-10 | `feature/testing-overlapping-requests` | テストで待たずに送る `dispatch` と、届くまで待つ `receive(_:timeout:)` （[#62](https://github.com/mitsuharu/swift-redux-saga/pull/62)） |
+| 12-11 | `feature/saga-scope` | 子の Saga を子の型のまま親に接続する （[#63](https://github.com/mitsuharu/swift-redux-saga/pull/63)） |
+| 12-12 | `feature/example-auth` | Example をログインと ToDo の 2 機能の構成に、Saga の寿命のガイド （[#64](https://github.com/mitsuharu/swift-redux-saga/pull/64)） |

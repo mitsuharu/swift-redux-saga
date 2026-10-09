@@ -123,7 +123,7 @@ public final class TestStore<State: Sendable & Equatable, Action: Sendable> {
   ///
   /// 応答を手動で返すスタブを `call` している間など、Saga が止まらない状態で次の Action を送りたい場合に使います
   /// （検索語の連続した変更、通信中のログアウト、結果の到着順の逆転など）。Saga が dispatch する Action は
-  /// ``receive(_:timeout:assert:fileID:line:)`` で届くまで待って確かめます。
+  /// `receive(_:timeout:)` で届くまで待って確かめます。
   ///
   /// - Throws: State が期待と異なる場合は ``TestStoreFailure``。
   public func dispatch(
@@ -142,7 +142,12 @@ public final class TestStore<State: Sendable & Equatable, Action: Sendable> {
   ///
   /// ``dispatch(_:assert:fileID:line:)`` と組み合わせて、Saga が止まらない状態で使います。
   ///
-  /// - Parameter timeout: 待つ時間の上限（実時間）。過ぎても届かなければ失敗します。
+  /// - Parameters:
+  ///   - expected: 期待する Action。
+  ///   - timeout: 待つ時間の上限（実時間）。過ぎても届かなければ失敗します。
+  ///   - assert: 期待する State の変化。省略すると State を確かめません。
+  ///   - fileID: 失敗の報告に使うファイル。
+  ///   - line: 失敗の報告に使う行。
   /// - Throws: 時間内に Action が届かない、等しくない、または State が期待と異なる場合は ``TestStoreFailure``。
   public func receive(
     _ expected: Action,
@@ -157,7 +162,13 @@ public final class TestStore<State: Sendable & Equatable, Action: Sendable> {
 
   /// Saga やミドルウェアが次に dispatch する Action を、届くまで待ってパターンで確かめ、取り出した値を返します。
   ///
-  /// - Parameter timeout: 待つ時間の上限（実時間）。過ぎても届かなければ失敗します。
+  /// - Parameters:
+  ///   - pattern: 期待する Action のパターン。
+  ///   - timeout: 待つ時間の上限（実時間）。過ぎても届かなければ失敗します。
+  ///   - assert: 期待する State の変化。省略すると State を確かめません。
+  ///   - fileID: 失敗の報告に使うファイル。
+  ///   - line: 失敗の報告に使う行。
+  /// - Throws: 時間内に Action が届かない、一致しない、または State が期待と異なる場合は ``TestStoreFailure``。
   @discardableResult
   public func receive<Value>(
     _ pattern: ActionPattern<Action, Value>,

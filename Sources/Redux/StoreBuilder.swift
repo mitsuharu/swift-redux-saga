@@ -8,7 +8,7 @@ extension Store {
   /// } middleware: {
   ///   sagaMiddleware
   ///   if isDebug {
-  ///     LoggerMiddleware()
+  ///     LoggingMiddleware()
   ///   }
   /// }
   /// ```
