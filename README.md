@@ -327,9 +327,16 @@ store.observe { $0.count } onChange: { [weak self] count in
 let button = UIButton(primaryAction: store.action(.increment, title: "+1"))
 ```
 
-### MVVM と併用する
+### Store を直接使うか、MVVM を経由するか
 
-画面特有の状態（入力中の文字列など）まで Store に置くと、State が画面の都合で大きくなります。MVVM と併用し、画面特有の状態は ViewModel に持たせ、複数の画面で使うデータと Saga が関わる処理は Store に置くことをおすすめします。
+画面ごとに、次の 2 つの書き方を使い分けられます（[サンプル](#サンプル)に両方あります）。
+
+| 書き方 | 向いている画面 |
+| --- | --- |
+| View / ViewController が Store を直接読み、dispatch する | 画面特有の状態がなく、Store の値を表示して操作するだけの単純な画面（設定画面など） |
+| MVVM を経由する（View は ViewModel だけを見る） | 入力中の文字列や選択中の項目など、画面特有の状態や判断がある画面 |
+
+画面特有の状態まで Store に置くと、State が画面の都合で大きくなります。その場合は MVVM と併用し、画面特有の状態は ViewModel に持たせ、複数の画面で使うデータと Saga が関わる処理は Store に置いてください。
 
 ```swift
 @MainActor
@@ -396,7 +403,7 @@ Examples/
 └── UIKitExample/     UIKit アプリ
 ```
 
-- MVVM と併用し、画面特有の状態は ViewModel、共有データと Saga が関わる処理は Store に置いています。
+- ToDo の画面は MVVM を経由し（画面特有の状態は ViewModel、共有データと Saga が関わる処理は Store）、設定の画面は Store を直接使っています。
 - `@Slice` / `@ActionCases`、`@BindableState`、`takeLatest` / `takeLeading` / `debounce`、`LoggingMiddleware`、設定の永続化（`ReduxPersistence`）、`TestStore` によるテストを使っています。
 
 `Examples/Examples.xcodeproj` を Xcode で開いて実行できます。
