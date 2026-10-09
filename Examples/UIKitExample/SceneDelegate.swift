@@ -1,6 +1,8 @@
 import AppFeature
 import Domain
 import Foundation
+import Redux
+import ReduxUIKit
 import UIKit
 
 /// アプリ本体は View と Store の組み立てだけを持つ。依存（リポジトリ）はここで決めて注入する。
@@ -23,7 +25,23 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
   ) {
     guard let scene = scene as? UIWindowScene else { return }
     let window = UIWindow(windowScene: scene)
-    // MVVM を経由する画面（ToDo）と、Store を直接使う画面（Settings）をタブで並べる。
+    window.makeKeyAndVisible()
+    self.window = window
+    // ログインしていなければログイン画面を、していれば ToDo と設定のタブを表示する。
+    app.store.observe {
+      $0.auth.user != nil
+    } onChange: { [weak self] isLoggedIn in
+      self?.window?.rootViewController = isLoggedIn ? self?.makeTabs() : self?.makeLogin()
+    }
+    .retained(by: window)
+  }
+
+  private func makeLogin() -> UIViewController {
+    UINavigationController(rootViewController: LoginViewController(store: app.store))
+  }
+
+  /// MVVM を経由する画面（ToDo）と、Store を直接使う画面（Settings）をタブで並べる。
+  private func makeTabs() -> UIViewController {
     let todo = UINavigationController(
       rootViewController: TodoViewController(viewModel: TodoListViewModel(store: app.store)))
     todo.tabBarItem = UITabBarItem(title: "ToDo", image: UIImage(systemName: "checklist"), tag: 0)
@@ -33,9 +51,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
       title: "Settings", image: UIImage(systemName: "gear"), tag: 1)
     let tabBar = UITabBarController()
     tabBar.viewControllers = [todo, settings]
-    window.rootViewController = tabBar
-    window.makeKeyAndVisible()
-    self.window = window
+    return tabBar
   }
 
   func sceneDidEnterBackground(_ scene: UIScene) {
