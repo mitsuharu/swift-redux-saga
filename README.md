@@ -3,7 +3,7 @@
 Swift 6 で書かれた Redux（[Redux Toolkit](https://redux-toolkit.js.org/) を参考にした実装）と、その上で動く [Redux Saga](https://redux-saga.js.org/) の Swift Package です。
 
 > [!WARNING]
-> 開発中です。1.0 まで API は変わることがあります。
+> 1.0.0 までは、マイナーバージョン（0.x）でも公開 API が変わることがあります。変更は [CHANGELOG](CHANGELOG.md) に記録します。
 
 ## 特徴
 
@@ -27,7 +27,7 @@ Swift 6 で書かれた Redux（[Redux Toolkit](https://redux-toolkit.js.org/) �
 
 ```swift
 dependencies: [
-  .package(url: "https://github.com/mitsuharu/swift-redux-saga.git", branch: "main")
+  .package(url: "https://github.com/mitsuharu/swift-redux-saga.git", from: "0.1.0")
 ]
 ```
 
@@ -410,6 +410,7 @@ Examples/
 
 ## ドキュメント
 
+- [変更履歴（CHANGELOG）](CHANGELOG.md)
 - [設計書](docs/design.md)
 - [ロードマップ](docs/roadmap.md)
 - [ReSwift / ReSwift-Saga からの移行ガイド](docs/migration.md)
