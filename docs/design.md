@@ -255,7 +255,7 @@ let store = Store<AppState, AppAction>(initialState: AppState()) {
 } middleware: {
   sagaMiddleware
   if isDebug {
-    LoggerMiddleware()
+    LoggingMiddleware()
   }
 }
 ```
@@ -267,6 +267,27 @@ dispatch の処理中に `dispatch` が呼ばれた場合（ミドルウェア�
 - 再入をその場で処理しないのは、通知の途中で State が書き換わり、先に呼ばれた Action より後の Action の結果が先に見えてしまうため。
 - 再入を禁止（`assertionFailure`）しないのは、SwiftUI / UIKit の Observation の通知からの dispatch は利用側で避けにくく、禁止すると実用上困るため。
 - reducer は Store を参照できない `@Sendable` の純粋関数なので、reducer の中からの dispatch は型の上で起こらない。
+
+#### 機能ごとの Store（scope）
+
+機能ごとのモジュールの View / ViewModel が、アプリ全体の `AppState` / `AppAction` を知らずに書けるよう、State と Action の一部だけを扱う Store を作れるようにする（Reducer の `scope`、Saga の接続（6.9）と同じ考え方）。
+
+```swift
+extension Store {
+  public func scope<ChildState, ChildAction>(
+    state: KeyPath<State, ChildState>,                    // 関数版もある
+    action embed: @escaping (ChildAction) -> Action
+  ) -> Store<ChildState, ChildAction>
+}
+
+let todoStore = store.scope(state: \.todo, action: AppAction.todo)   // Store<TodoFeature.State, TodoFeature.Action>
+```
+
+- 作った Store は同じ `Store` 型なので、`@Environment`、`binding`、`observe` などがそのまま使える。
+- 作った Store は State の写しを持ち、親が State を更新したときに、親から子の State を取り出して同じ手順（5.4 の新旧の比較と通知）で更新する。読み取りの追跡は子でもプロパティ単位になる。親の State が変わらなかったときは子に知らせない。
+- dispatch は `embed` で包んで親に送る。子はミドルウェアと reducer を持たない。
+- 子は親を強参照し（子を使っている間は親が残る）、親は子を弱参照する（使い終わった子は解放され、親は知らせる先から外す）。
+- 子を親の State へのキーパスで追跡する方式（親の registrar に合成したキーパスで登録する）は採らない。合成したキーパスは `Sendable` を静的に示せず、子の `TrackedState` の追跡も作り直しになるため。
 
 ### 5.4 Observation の追跡単位（プロパティ単位の再描画）
 

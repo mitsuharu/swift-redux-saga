@@ -6,6 +6,7 @@
 
 ### 追加
 
+- State と Action の一部だけを扱う Store を作る `Store.scope(state:action:)`。機能ごとのモジュールの View や ViewModel が、アプリ全体の型を知らずに書ける
 - 子の State・Action で書いた Saga を、子の型のまま親に接続する `SagaRuntime.run(_:state:action:embed:)` / `SagaMiddleware.run(_:state:action:embed:)` / `SagaContext.fork(_:state:action:embed:)`（Reducer の `scope` の Saga 版）
 - `TestStore` / `SagaTester` に、Saga が止まるのを待たずに送る `dispatch` と、Action が届くまで待つ `receive(_:timeout:)` を追加。応答を手動で返すスタブで、通信が重なる場面（検索語の連続した変更、結果の到着順の逆転など）を検証できる
 - `Identifiable` の配列の要素を ID で読み書きする添字 `[id:]`（`Redux`）。添字のキーパス（`\.todos[index]`）で読んだ要素を削除すると停止するため、一覧の要素は ID で読む

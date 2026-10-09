@@ -42,8 +42,12 @@ private struct RootView: View {
     } else {
       TabView {
         // MVVM を経由する画面: View は ViewModel だけを見る。ViewModel が Store を読む。
-        TodoListView(viewModel: TodoListViewModel(store: store))
-          .tabItem { Label("ToDo", systemImage: "checklist") }
+        // ViewModel には ToDo の機能の Store（scope したもの）を渡し、アプリ全体の型を知らせない。
+        TodoListView(
+          viewModel: TodoListViewModel(
+            store: store.scope(state: \.todo, action: RootFeature.Action.todo))
+        )
+        .tabItem { Label("ToDo", systemImage: "checklist") }
         // Store を直接使う画面: 画面特有の状態がない単純な画面は、Store を直接読んで dispatch する。
         SettingsView()
           .tabItem { Label("Settings", systemImage: "gear") }

@@ -43,7 +43,9 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
   /// MVVM を経由する画面（ToDo）と、Store を直接使う画面（Settings）をタブで並べる。
   private func makeTabs() -> UIViewController {
     let todo = UINavigationController(
-      rootViewController: TodoViewController(viewModel: TodoListViewModel(store: app.store)))
+      rootViewController: TodoViewController(
+        viewModel: TodoListViewModel(
+          store: app.store.scope(state: \.todo, action: RootFeature.Action.todo))))
     todo.tabBarItem = UITabBarItem(title: "ToDo", image: UIImage(systemName: "checklist"), tag: 0)
     let settings = UINavigationController(
       rootViewController: SettingsViewController(store: app.store))
