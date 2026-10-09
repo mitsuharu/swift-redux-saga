@@ -1,4 +1,5 @@
 import Foundation
+import InternalPrimitives
 import Redux
 import ReduxPersistence
 import SagaTesting
@@ -160,6 +161,66 @@ private func makePersistence(_ storage: InMemoryStorage, version: Int = 1)
     // 保存はメインアクター外の Task で行われるので、保存されるまで待つ。
     while storage.values.isEmpty { await Task.yield() }
     #expect(makePersistence(storage).restore(into: AppState()).settings.theme == "dark")
+  }
+}
+
+/// 最初の書き込みを、`release()` を呼ぶまで止める保存先。
+private final class GatedStorage: PersistenceStorage {
+  // DispatchSemaphore を使わないのは、Linux の Foundation では Sendable でないため。
+  private let isReleased = Locked(false)
+  private let saves = Locked<[Data]>([])
+  private let latest = Locked<Data?>(nil)
+  private let completed = Locked(0)
+
+  var startedSaves: Int { saves.withLock { $0.count } }
+  var completedSaves: Int { completed.withLock { $0 } }
+
+  func release() { isReleased.withLock { $0 = true } }
+
+  func load(key: String) throws -> Data? { latest.withLock { $0 } }
+
+  func save(_ data: Data, key: String) throws {
+    let isFirst = saves.withLock { saves -> Bool in
+      saves.append(data)
+      return saves.count == 1
+    }
+    while isFirst, !isReleased.withLock({ $0 }) {
+      Thread.sleep(forTimeInterval: 0.001)
+    }
+    latest.withLock { $0 = data }
+    completed.withLock { $0 += 1 }
+  }
+
+  func remove(key: String) throws { latest.withLock { $0 = nil } }
+}
+
+@MainActor
+@Suite struct PersistenceSaveOrderTests {
+  @Test func aNewerStateIsNotOverwrittenByASlowerOlderSave() async throws {
+    let storage = GatedStorage()
+    let clock = TestClock()
+    let middleware = PersistenceMiddleware<AppState, Action>(
+      Persistence(key: "settings", storage: storage, keyPath: \.settings),
+      debounce: .seconds(1), clock: clock)
+    let store = Store(initialState: AppState(), reducer: reducer, middleware: [middleware])
+
+    store.dispatch(.setTheme("dark"))
+    while clock.sleeperCount == 0 { await Task.yield() }
+    clock.advance(by: .seconds(1))
+    // 古い State の書き込みが始まり、止まっている。
+    while storage.startedSaves == 0 { await Task.yield() }
+
+    store.dispatch(.setTheme("blue"))
+    let flushed = Task { await middleware.flush() }
+    storage.release()
+    await flushed.value
+    // 止めていた古い書き込みも終わってから、残った値を確かめる。
+    while storage.completedSaves < storage.startedSaves { await Task.yield() }
+
+    let restored = Persistence<AppState, Settings>(
+      key: "settings", storage: storage, keyPath: \.settings
+    ).restore(into: AppState())
+    #expect(restored.settings.theme == "blue")
   }
 }
 
