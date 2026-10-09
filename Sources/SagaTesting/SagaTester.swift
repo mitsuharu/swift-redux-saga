@@ -162,7 +162,8 @@ public final class SagaTester<State: Sendable, Action: Sendable>: Sendable {
       var state: State
       var received: [Action] = []
       var errors: [SagaError] = []
-      var runtime: SagaRuntime<State, Action>?
+      // 弱参照にするのは、ランタイムが Host を強参照しており、強参照だと循環して解放されないため。
+      weak var runtime: SagaRuntime<State, Action>?
     }
 
     private let storage: Locked<Storage>
