@@ -357,7 +357,7 @@ final class TodoListViewModel {
 }
 ```
 
-ViewModel の計算プロパティが Store を読むので、Observation がそのまま連鎖し、Store が変わると View も更新されます。View / ViewController は ViewModel だけを見ます。UIKit で iOS 26 未満にも対応する場合は、`ObservationToken.observe { viewModel.todos } onChange: { ... }` で ViewModel を購読できます。
+ViewModel には Store の値の写しを持たせず、計算プロパティで Store を読みます（single source of truth を保つため。ViewModel が持つのは Store にない画面特有の状態だけです）。ViewModel の計算プロパティが Store を読むので、Observation がそのまま連鎖し、Store が変わると View も更新されます。View / ViewController は ViewModel だけを見ます。UIKit で iOS 26 未満にも対応する場合は、`ObservationToken.observe { viewModel.todos } onChange: { ... }` で ViewModel を購読できます。
 
 ### default MainActor isolation を有効にしたアプリ
 
