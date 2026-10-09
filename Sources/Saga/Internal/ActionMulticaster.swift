@@ -33,7 +33,11 @@ final class ActionMulticaster<Action: Sendable>: Sendable {
   /// 次に emit される、パターンに一致する Action を待つ。
   ///
   /// 一致した時点で登録を外す（1 回限り）。キャンセルされたら登録を外して `CancellationError` を投げる。
-  func take<Value>(_ pattern: ActionPattern<Action, Value>) async throws -> Value {
+  /// `onWaiting` は登録した直後に呼ぶ。
+  func take<Value>(
+    _ pattern: ActionPattern<Action, Value>,
+    onWaiting: @Sendable () -> Void = {}
+  ) async throws -> Value {
     let id = makeID()
     return try await withTaskCancellationHandler {
       try await withCheckedThrowingContinuation { continuation in
@@ -51,6 +55,8 @@ final class ActionMulticaster<Action: Sendable>: Sendable {
           return true
         }
         if registered {
+          // 待ち始めたことを知らせてから数を減らす。知らせた先で Action を届ける間、止まっているとみなされないため。
+          onWaiting()
           activity.end()
         } else {
           continuation.resume(throwing: CancellationError())

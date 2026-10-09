@@ -885,11 +885,16 @@ public final class SagaMiddleware<State: Sendable, Action: Sendable>: Middleware
 
 ### 起動直後の Action（redux-saga との違い）
 
-redux-saga の `run` は、ルート Saga を最初の `take` まで同期に進めてから戻ります。Swift では async 関数を同期に進められないため、`run` から Saga は非同期に動き出し、**起動直後に dispatch した Action は、まだ `take` で待ち始めていない Saga に届きません**。
+redux-saga の `run` は、ルート Saga を最初の Effect まで同期に進めてから戻ります。Swift では async 関数を同期に進められないため、`run` から Saga は非同期に動き出します。そのままでは、起動直後（View の表示時など）に dispatch した Action が、まだ `take` で待ち始めていない Saga に届かず、黙って失われます。
 
-- 起動時の処理（初期データの読み込みなど）は、外から Action を dispatch せず、ルート Saga の中に書く（推奨）。
-- 外から dispatch する必要がある場合は、先に `await sagaMiddleware.waitUntilIdle()` で待つ。
-- 起動前の Action をバッファして後から配る方式は採らない。どの Saga が「起動中」かを決められず、長い `call` を先に行う Saga があると、すべての Action が遅れるため。
+そこで、redux-saga の「最初の Effect まで進めてから戻る」に合わせて、起動中の Action を溜めて後から届けます。
+
+- 最初の `run` から、その間に起動した Saga（`run` / `fork` / `spawn`）がすべて最初の待つ Effect（`take` / `put` / `select` / `call` / `join` / `delay`）か終わりに達するまでを「起動中」とする。
+- 起動中に emit された Action は溜めておき、起動中が終わった時点で順に届ける。`take` は待ち始めた（登録した）後に達したとみなす。
+- `fork` / `spawn` / `cancel` は待たずに続きを実行するので、達したとみなさない。`takeEvery` などのヘルパーは呼び出した時点で購読を始めているので、ヘルパーの子は待たない。
+- 起動時に長い `call`（通信など）を行っても、その `call` に達した時点で起動中は終わるので、ほかの Action は遅れない。
+- チャネルの読み取りのように Effect を通らずに待つ Saga があっても溜め続けないよう、すべての Saga が止まったとき（Activity が 0 になるとき）にも届ける。
+- 溜めるのは最初の `run` の起動中だけ。起動後に `run` した Saga は、redux-saga と同じく、待ち始める前の Action を受け取らない。
 
 ## 8. エラー処理
 
@@ -963,6 +968,7 @@ Swift にはジェネレーターがないため、redux-saga の「Effect を 1
 - Saga の本体が動いている間と、本体が終わってから終わり方が確定する（finish）までの後始末を数える。
 - `take` / `delay`（`TestClock` のとき）/ `join` で止まる直前に減らし、**再開させる側**が resume の直前に増やす。再開される側で増やすと、resume から動き出すまでの間に 0 と誤判定するため。
 - キャンセルの要求、子の失敗、最後の子の終了は、対象の Saga の後始末の分を先に数えてから自分の分を減らす。キャンセルや失敗の伝播の途中で 0 にならないようにするため。
+- 起動中に溜めた Action（7 章）は、数が 0 になるときに、1 つ数えたまま届ける。届け終わる前に `settle()` が戻らないようにするため。
 - `call` で呼んだ関数の実行中は数える。終わらない関数（実際の通信など）を呼ぶと `settle()` も終わらないので、テストではスタブを渡す。
 - `TestClock` 以外の時計（実時間）で `delay` している間は数えない。眠る直前に減らし、起きた Saga が自分で増やす（起こす側に手を入れられないため）。数えると、`delay` を繰り返す Saga があるだけで `waitUntilIdle()` が戻らなくなる。
 
@@ -1136,7 +1142,7 @@ enum Counter {
 設計書の当初の案から変えた点（理由は各章）:
 
 - dispatch 中の dispatch は禁止せず、キューに積んで後で処理する（5.3）。
-- 起動直後の Action は Saga に届かないことがあるため、起動時の処理はルート Saga に書くか `waitUntilIdle()` で待つ（7 章）。
+- 起動直後の Action は、Saga が最初の Effect に達するまで溜めて後から届ける（7 章）。
 - `all` / `race` の処理は `(SagaContext) async throws -> R` を受け取る（6.5）。
 - マクロで Action を取り出す書き方は `.case(\.toggleTapped)`（12 章）。
 - 入力欄の Binding はマクロではなくプロパティラッパー（`@BindableState`）にした（5.10）。

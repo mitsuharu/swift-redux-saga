@@ -15,6 +15,7 @@ package final class Activity: Sendable {
     var running = 0
     var nextWaiterID = 0
     var idleWaiters: [Int: CheckedContinuation<Void, Never>] = [:]
+    var onIdle: (@Sendable () -> Void)?
   }
 
   private let storage = Locked(Storage())
@@ -30,13 +31,34 @@ package final class Activity: Sendable {
     storage.withLock { $0.running += 1 }
   }
 
+  /// 次に実行中の Saga がなくなったときに、1 回だけ呼ぶ処理を登録する。
+  ///
+  /// 呼び終わるまでは実行中として数える。処理の中で Saga を再開させた（`begin()` した）場合は、待っている側
+  /// （``waitUntilIdle()``）は再開しない。
+  package func onIdle(_ handler: @escaping @Sendable () -> Void) {
+    storage.withLock { $0.onIdle = handler }
+  }
+
   package func end() {
-    let waiters = storage.withLock { storage -> [CheckedContinuation<Void, Never>] in
+    let onIdle = storage.withLock { storage -> (@Sendable () -> Void)? in
       storage.running -= 1
       // 数え方の不整合はテストの待ち合わせにしか影響しないため、リリースビルドではアプリを止めずに 0 に戻す。
       // デバッグビルドでは不具合として検出する。
       assert(storage.running >= 0, "Activity.end() was called more than begin().")
       storage.running = max(storage.running, 0)
+      guard storage.running == 0, let onIdle = storage.onIdle else { return nil }
+      // 呼び終わるまで 1 つ数えておく。数えずに呼ぶと、呼び終わる前に waitUntilIdle() が戻ってしまうため。
+      storage.running = 1
+      storage.onIdle = nil
+      return onIdle
+    }
+    if let onIdle {
+      // ロックの外で呼ぶのは、処理の中で begin() されてもデッドロックしないため。
+      onIdle()
+      end()
+      return
+    }
+    let waiters = storage.withLock { storage -> [CheckedContinuation<Void, Never>] in
       guard storage.running == 0 else { return [] }
       defer { storage.idleWaiters = [:] }
       return Array(storage.idleWaiters.values)

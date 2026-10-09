@@ -10,7 +10,7 @@ let store = Store(initialState: AppState(), reducer: appReducer, middleware: [sa
 sagaMiddleware.run(appSagas.root)
 ```
 
-Saga が受け取るのは、reducer を適用した後の Action です。`run` の直後に dispatch した Action は、まだ待ち始めていない Saga に届かないことがあるため、起動時の処理はルート Saga の中に書くか、``SagaMiddleware/waitUntilIdle()`` で待ってください。
+Saga が受け取るのは、reducer を適用した後の Action です。`run` の直後に dispatch した Action は、起動した Saga が最初の Effect に達するまで溜めて後から届けるので、取りこぼしません。
 
 ## Topics
 

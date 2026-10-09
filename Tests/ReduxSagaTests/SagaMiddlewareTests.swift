@@ -39,6 +39,18 @@ private let fetch = ActionPattern<Action, Int>.case {
     await middleware.waitUntilIdle()
   }
 
+  @Test func anActionDispatchedRightAfterRunReachesTheSaga() async {
+    let (store, middleware) = makeStore()
+    middleware.run(
+      Saga { ctx in
+        ctx.takeEvery(fetch) { ctx, id in await ctx.put(.loaded("user \(id)")) }
+      })
+    // run の直後（View の onAppear など、Saga が動き出す前）に dispatch する。
+    store.dispatch(.fetch(1))
+    await settle(middleware)
+    #expect(store.name == "user 1")
+  }
+
   @Test func aSagaReactsToADispatchedActionAndPutsItsResultIntoTheStore() async {
     let (store, middleware) = makeStore()
     middleware.run(

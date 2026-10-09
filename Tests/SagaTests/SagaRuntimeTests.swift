@@ -264,4 +264,99 @@ private struct TestError: Error, Equatable {}
     await runtime.waitUntilIdle()
     #expect(runtime.activity.running == 0)
   }
+
+  @Test func actionsEmittedBeforeTheFirstSagaStartsWaitingAreDeliveredInOrder() async throws {
+    let host = makeHost()
+    let runtime = host.makeRuntime()
+    runtime.run(
+      Saga { ctx in
+        ctx.takeEvery(fetch) { ctx, id in await ctx.put(.loaded(id)) }
+      })
+    // Saga が動き出す前（View の表示時など）に emit する。
+    runtime.emit(.fetch(1))
+    runtime.emit(.fetch(2))
+    runtime.emit(.fetch(3))
+    await runtime.waitUntilIdle()
+    // ワーカーは並行に動くので、届いた順ではなく、すべて届いたことを確かめる。
+    let loaded = host.dispatched.compactMap { action -> Int? in
+      if case .loaded(let id) = action { id } else { nil }
+    }
+    #expect(loaded.sorted() == [1, 2, 3])
+    runtime.stop()
+  }
+
+  @Test func actionsEmittedBeforeTheFirstSagaStartsWaitingReachASequentialTake() async throws {
+    let host = makeHost()
+    let runtime = host.makeRuntime()
+    let task = runtime.run(
+      Saga { ctx in
+        let id = try await ctx.take(fetch)
+        await ctx.put(.loaded(id))
+      })
+    runtime.emit(.fetch(1))
+    try await task.join()
+    #expect(host.dispatched == [.loaded(1)])
+  }
+
+  @Test func actionsAreNotBufferedOnceTheSagasHaveStarted() async throws {
+    let host = makeHost()
+    let runtime = host.makeRuntime()
+    runtime.run(Saga { ctx in _ = try await ctx.take(.action(.other)) })
+    await runtime.waitUntilIdle()
+    // 起動後に run した Saga は、待ち始める前の Action を受け取らない（溜めるのは最初の起動の間だけ）。
+    let late = runtime.run(
+      Saga { ctx in
+        let id = try await ctx.take(fetch)
+        await ctx.put(.loaded(id))
+      })
+    await runtime.waitUntilIdle()
+    runtime.emit(.fetch(2))
+    try await late.join()
+    #expect(host.dispatched == [.loaded(2)])
+    runtime.stop()
+  }
+
+  @Test func stoppingDuringStartupDoesNotKeepBufferingForever() async throws {
+    let host = makeHost()
+    let runtime = host.makeRuntime()
+    let task = runtime.run(Saga { ctx in _ = try await ctx.take(fetch) })
+    runtime.emit(.other)
+    task.cancel()
+    await #expect(throws: CancellationError.self) { try await task.join() }
+    await runtime.waitUntilIdle()
+    #expect(runtime.activity.running == 0)
+  }
+
+  @Test func aLongCallAtStartupDoesNotDelayActionsForSagasAlreadyWaiting() async throws {
+    let host = makeHost()
+    let runtime = host.makeRuntime()
+    let (handled, continuation) = AsyncStream.makeStream(of: Int.self)
+    runtime.run(
+      Saga { ctx in
+        ctx.takeEvery(fetch) { _, id in continuation.yield(id) }
+        // 起動時の長い処理（通信など）。終わるまで待たずに、上の takeEvery に Action が届く。
+        try await ctx.call { try await Task.sleep(for: .seconds(3600)) }
+      })
+    runtime.emit(.fetch(1))
+    var iterator = handled.makeAsyncIterator()
+    #expect(await iterator.next() == 1)
+    runtime.stop()
+  }
+
+  @Test func actionsWaitUntilForkedChildrenStartedDuringStartupReachTheirFirstEffect() async throws
+  {
+    let host = makeHost()
+    let runtime = host.makeRuntime()
+    runtime.run(
+      Saga { ctx in
+        ctx.fork { ctx in
+          let id = try await ctx.take(fetch)
+          await ctx.put(.loaded(id))
+        }
+      })
+    runtime.emit(.fetch(1))
+    await runtime.waitUntilIdle()
+    #expect(host.dispatched == [.loaded(1)])
+    runtime.stop()
+  }
 }

@@ -292,7 +292,7 @@ func makeStore(api: UserAPI) -> Store<UserState, UserAction> {
 }
 ```
 
-起動直後の Action の扱いが redux-saga / 旧実装と異なります。`run` の直後に dispatch した Action は、まだ待ち始めていない Saga に届かないことがあるため、起動時の処理はルート Saga の中に書いてください（[設計書 7 章](design.md#起動直後の-actionredux-saga-との違い)）。
+Saga は `run` から非同期に動き出しますが、`run` の直後に dispatch した Action は、起動した Saga が最初の Effect に達するまで溜めて後から届けます。redux-saga / 旧実装と同じく、起動直後の Action を取りこぼしません（[設計書 7 章](design.md#起動直後の-actionredux-saga-との違い)）。
 
 #### 5. View の購読を置き換える
 

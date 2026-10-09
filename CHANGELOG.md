@@ -6,6 +6,7 @@
 
 ### 修正
 
+- `run` の直後（Saga が動き出す前）に dispatch した Action が Saga に届かず、黙って失われていた。起動した Saga が最初の Effect に達するまで溜めて、後から届ける
 - 実時間の時計で `delay` している Saga があると、`waitUntilIdle()` が戻らない不具合を修正
 - 永続化の保存が重なったとき、古い State が後から書かれて残り得た不具合を修正（`PersistenceMiddleware`）
 
