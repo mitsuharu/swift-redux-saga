@@ -511,6 +511,14 @@ extension Reducer where Action: BindableAction, Action.State == State {
 extension Store where Action: BindableAction, Action.State == State {
   public func binding<Value: Equatable & Sendable>(_ keyPath: WritableKeyPath<State, BindableState<Value>> & Sendable) -> Binding<Value>
 }
+extension Store {
+  // Optional の値（ID で読んだ一覧の要素のプロパティなど）の Binding。nil のときは defaultValue
+  public func binding<Value: Equatable>(_ keyPath: KeyPath<State, Value?> & Sendable, default defaultValue: Value, send: @escaping (Value) -> Action) -> Binding<Value>
+}
+// Redux: 一覧の要素を ID で読み書きする（添字のキーパスは要素の削除で範囲外になり、Store が変化を判定するときに停止するため）
+extension Array where Element: Identifiable {
+  public subscript(id id: Element.ID) -> Element? { get set }   // nil を書くと削除、なければ末尾に追加
+}
 // ReduxSaga（Saga は Redux に依存しないため、Redux の型を使うパターンはここに置く）
 extension ActionPattern where Action: BindableAction {
   public static func binding(_ keyPath: WritableKeyPath<Action.State, BindableState<Value>> & Sendable) -> Self

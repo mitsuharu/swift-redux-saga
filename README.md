@@ -347,6 +347,17 @@ enum Action: Sendable, BindableAction {
 TextField("New ToDo", text: store.binding(\.$draft))
 ```
 
+一覧の要素は、添字（`\.todos[index]`）ではなく ID で読んでください。Store は読んだキーパスを覚えて変化を判定するため、添字で読んだ要素を削除すると範囲外になり、プログラムが停止します。`Identifiable` の配列は `[id:]` で、`EntityState` は `entities[id]` で読めます（要素がなければ `nil`）。Optional の値の `Binding` は `default:` を指定して作ります。
+
+```swift
+ForEach(store.todos) { todo in
+  TextField("Title", text: store.binding(\.todos[id: todo.id]?.title, default: "") {
+    .rename(id: todo.id, title: $0)
+  })
+}
+// reducer: case .rename(let id, let title): state.todos[id: id]?.title = title
+```
+
 ### UIKit
 
 iOS 26 以降（または `UIObservationTrackingEnabled` を有効にした iOS 18 以降）は、`updateProperties()` や `viewWillLayoutSubviews()` で `store.count` を読むだけで自動で追跡されます。それ以前の OS では `observe` を使います。
