@@ -861,6 +861,23 @@ public struct SagaChannel<Value: Sendable>: Sendable, AsyncSequence {
 
 `SagaRuntime` は `any Clock<Duration>` を受け取ります（既定は `ContinuousClock`）。`delay` / `debounce` / `throttle` はこの Clock を使うため、テストでは `TestClock` に差し替えて時間を進められます。
 
+### 6.9 機能ごとの Saga の接続（scope）
+
+機能ごとにモジュールを分けるアプリでは、`Saga<Todo.State, Todo.Action>` と `Saga<Auth.State, Auth.Action>` を親の `Saga<AppState, AppAction>` で動かしたい。Reducer の `scope` と同じく、子の型のまま親に接続する。
+
+```swift
+// ランタイム / SagaMiddleware: 起動時に接続する
+runtime.run(todoSagas.root, state: \.todo, action: \.todo, embed: AppAction.todo)
+// Saga の中: 子として接続する（呼び出し元のキャンセルで止まる。ログイン中だけ動かすなど）
+let session = ctx.fork(todoSagas.root, state: \.todo, action: \.todo, embed: AppAction.todo)
+```
+
+- 接続ごとに子の `SagaRuntime<ChildState, ChildAction>` を作る。子の Host は親の Host を通して、`state` で子の State を読み、`embed` で包んだ親の Action を発行する。
+- 親のランタイムは、届いた Action を `action` で取り出して子に emit する。子の Saga が終わったら届けるのをやめ、子のランタイムを手放す。
+- 子のランタイムは親と `Activity` と ID の連番を共有する。親の `waitUntilIdle()` / テストの `settle()` が子の Saga も待ち、モニタで ID が重ならないようにするため。
+- 親の `stop()` で子も止める。未処理のエラーは親の `onError` に渡す。`ctx.fork` で接続した子のエラーは、呼び出し元には伝えない（子の根で `onError` に渡し済みで、伝えると二重に報告されるため）。
+- `SagaContext` を子の型に変換する方式（1 つのランタイムで型を付け替える）は採らない。`SagaContext` はランタイムの具体型を持ち、Effect の実装すべてに型の変換が必要になるため。
+
 ---
 
 ## 7. Redux と Saga の接続

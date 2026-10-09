@@ -172,6 +172,22 @@ let fetch = ActionPattern<AppAction, User.ID>.case {
 let id = try await ctx.take(fetch)
 ```
 
+#### 機能ごとの Saga を組み合わせる
+
+機能ごとにモジュールを分ける場合、子の Saga（`Saga<Todo.State, Todo.Action>`）を、子の型のまま親（`AppState` / `AppAction`）に接続できます。Reducer の `scope` と同じ考え方です。子の Saga の `select` は子の State を返し、`take` には子の Action が届き、`put` は親の Action に包んで発行します。
+
+```swift
+// 起動時に接続する
+sagaMiddleware.run(todoSagas.root, state: \.todo, action: \.todo, embed: AppAction.todo)
+
+// Saga の中で、子として接続する（ログイン中だけ動かし、ログアウトで止める）
+let session = ctx.fork(todoSagas.root, state: \.todo, action: \.todo, embed: AppAction.todo)
+_ = try await ctx.take(.case(\.logoutTapped))
+ctx.cancel(session)
+```
+
+`action:` には `@ActionCases` が生成する case のプロパティ（`\.todo`）を、`embed:` には case（`AppAction.todo`）を渡します。
+
 #### エラー処理
 
 ワーカーで処理しなかったエラーは、redux-saga と同じく fork 元に伝わります。`takeEvery` などのヘルパーはワーカーが失敗するとヘルパーごと終了し、エラーはルート Saga まで伝わって、**すべての Saga が止まります**。アプリは動き続けますが、以降の Action に Saga が反応しなくなります（エラーは `onError` に渡され、既定ではログに出ます）。
