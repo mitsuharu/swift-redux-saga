@@ -70,7 +70,7 @@ public final class TestClock: Clock, Sendable {
   }
 
   public func sleep(until deadline: Instant, tolerance: Duration? = nil) async throws {
-    try await sleep(until: deadline, onWake: nil)
+    try await sleep(until: deadline, onSleep: nil, onWake: nil)
   }
 
   /// 時計を進め、起床時刻を過ぎたタスクを起こします。
@@ -119,7 +119,9 @@ public final class TestClock: Clock, Sendable {
     }
   }
 
-  private func sleep(until deadline: Instant, onWake: (@Sendable () -> Void)?) async throws {
+  private func sleep(
+    until deadline: Instant, onSleep: (@Sendable () -> Void)?, onWake: (@Sendable () -> Void)?
+  ) async throws {
     let id = storage.withLock { storage in
       defer { storage.nextID += 1 }
       return storage.nextID
@@ -137,12 +139,12 @@ public final class TestClock: Clock, Sendable {
         }
         switch outcome {
         case .slept:
-          break
+          // 登録の後に呼ぶので、その前に起こされることはない（起こす側は登録された眠りしか見ない）。
+          // 起こす側の onWake が先に走っても、数は一時的に 1 多くなるだけで負にならない。
+          onSleep?()
         case .due:
-          onWake?()
           continuation.resume()
         case .cancelled:
-          onWake?()
           continuation.resume(throwing: CancellationError())
         }
       }
@@ -155,7 +157,11 @@ public final class TestClock: Clock, Sendable {
 }
 
 extension TestClock: ActivityTrackingClock {
-  package func sleep(for duration: Duration, onWake: @escaping @Sendable () -> Void) async throws {
-    try await sleep(until: now.advanced(by: duration), onWake: onWake)
+  package func sleep(
+    for duration: Duration,
+    onSleep: @escaping @Sendable () -> Void,
+    onWake: @escaping @Sendable () -> Void
+  ) async throws {
+    try await sleep(until: now.advanced(by: duration), onSleep: onSleep, onWake: onWake)
   }
 }
