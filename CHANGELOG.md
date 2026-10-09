@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### ドキュメント
+
+- README に Saga のエラー処理の節を追加（ワーカーのエラーで、すべての Saga が止まることと、その避け方）
+
 ### 修正
 
 - `run` の直後（Saga が動き出す前）に dispatch した Action が Saga に届かず、黙って失われていた。起動した Saga が最初の Effect に達するまで溜めて、後から届ける
