@@ -19,8 +19,15 @@ struct SwiftUIExampleApp: App {
 
   var body: some Scene {
     WindowGroup {
-      // 画面には ViewModel を渡す（MVVM と併用する）。ViewModel が Store を読む。
-      TodoListView(viewModel: TodoListViewModel(store: store))
+      TabView {
+        // MVVM を経由する画面: View は ViewModel だけを見る。ViewModel が Store を読む。
+        TodoListView(viewModel: TodoListViewModel(store: store))
+          .tabItem { Label("ToDo", systemImage: "checklist") }
+        // Store を直接使う画面: 画面特有の状態がない単純な画面は、Store を直接読んで dispatch する。
+        SettingsView()
+          .tabItem { Label("Settings", systemImage: "gear") }
+      }
+      .store(store)
     }
   }
 }
