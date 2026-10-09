@@ -17,6 +17,22 @@ public enum AppStore {
     Persistence(key: "preferences", storage: storage, keyPath: \.preferences)
   }
 
+  /// Store と、アプリのライフサイクルに合わせて呼ぶ処理。
+  @MainActor
+  public struct Components {
+    public let store: Store<State, Action>
+    let sagaMiddleware: SagaMiddleware<State, Action>
+    let persistenceMiddleware: PersistenceMiddleware<State, Action>
+
+    /// 保存を待っている設定をすぐに保存する。
+    ///
+    /// 設定は変わってから少し待ってまとめて保存するため、その間にアプリが終了すると保存されない。
+    /// バックグラウンドに入るときに呼ぶ。
+    public func flush() async {
+      await persistenceMiddleware.flush()
+    }
+  }
+
   /// Store を作り、Saga を起動する。
   ///
   /// - Parameters:
@@ -28,12 +44,16 @@ public enum AppStore {
     makeComponents(useCase: useCase, storage: storage).store
   }
 
-  /// Store と、Saga を載せたミドルウェアを作る。テストで Saga を待ち合わせるために、ミドルウェアも返す。
-  static func makeComponents(
-    useCase: TodoUseCase, storage: some PersistenceStorage
-  ) -> (store: Store<State, Action>, sagaMiddleware: SagaMiddleware<State, Action>) {
+  /// Store と、Saga と保存のミドルウェアを作る。
+  ///
+  /// アプリはバックグラウンドに入るときに ``Components/flush()`` を呼ぶ。テストは Saga を待ち合わせるために
+  /// ミドルウェアを使う。
+  public static func makeComponents(
+    useCase: TodoUseCase, storage: some PersistenceStorage = UserDefaultsStorage()
+  ) -> Components {
     let persistence = preferencesPersistence(storage: storage)
     let sagaMiddleware = SagaMiddleware<State, Action>()
+    let persistenceMiddleware = PersistenceMiddleware<State, Action>(persistence)
     let store = Store(
       // 保存した設定を復元してから始める。
       initialState: persistence.restore(into: TodoFeature.initialState),
@@ -42,11 +62,12 @@ public enum AppStore {
         // デバッグビルドでだけ Action を os.Logger に出力する。
         LoggingMiddleware(),
         // 設定が変わったら保存する。
-        PersistenceMiddleware<State, Action>(persistence),
+        persistenceMiddleware,
         sagaMiddleware,
       ]
     )
     sagaMiddleware.run(TodoSagas(useCase: useCase).root)
-    return (store, sagaMiddleware)
+    return Components(
+      store: store, sagaMiddleware: sagaMiddleware, persistenceMiddleware: persistenceMiddleware)
   }
 }

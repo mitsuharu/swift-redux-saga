@@ -14,7 +14,8 @@ import Testing
     -> (TodoListViewModel, SagaMiddleware<TodoFeature.State, TodoFeature.Action>)
   {
     let useCase = TodoUseCase(repository: InMemoryTodoRepository(latency: .zero))
-    let (store, sagaMiddleware) = AppStore.makeComponents(useCase: useCase, storage: storage)
+    let components = AppStore.makeComponents(useCase: useCase, storage: storage)
+    let (store, sagaMiddleware) = (components.store, components.sagaMiddleware)
     // 起動時の読み込み（refresh → loaded）を待たずに操作すると、後から届いた loaded が
     // 追加した ToDo を上書きするため、Saga が止まるまで待つ。
     await sagaMiddleware.waitUntilIdle()

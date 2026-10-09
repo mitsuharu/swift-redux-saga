@@ -53,7 +53,7 @@ public final class PersistenceMiddleware<State: Sendable, Action: Sendable>: Mid
     schedule(newState)
   }
 
-  /// 保存を待っている State があれば、すぐに保存します。
+  /// 保存を待っている State があれば、すぐに保存します。書き込み中の保存があれば、その終わりも待ちます。
   public func flush() async {
     guard let pending else { return }
     self.pending = nil
@@ -68,11 +68,15 @@ public final class PersistenceMiddleware<State: Sendable, Action: Sendable>: Mid
       pending.task.cancel()
     }
     let isSuperseded = Locked(false)
+    let previous = pending?.task
     let (save, clock, debounce, onError) = (save, clock, debounce, onError)
     // Task.detached にするのは、エンコードとファイルへの書き込みをメインアクターで行わないため。
     let task = Task.detached {
       // flush() でキャンセルされた場合は、待たずにすぐ保存する。
       try? await clock.sleep(for: debounce)
+      // 前の保存が書き込み中なら終わるのを待つ。待たずに書くと、前の（古い）State が後から書かれて残り得る。
+      // 新しい保存に置き換えられた場合も待ってから戻るのは、次の保存が前の書き込みを待てるようにするため。
+      await previous?.value
       guard !isSuperseded.withLock({ $0 }) else { return }
       do {
         try save(state)
