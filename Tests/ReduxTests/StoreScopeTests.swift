@@ -102,3 +102,24 @@ private func observeChange(_ read: @escaping @MainActor () -> Void) -> Locked<Bo
     #expect(store.counter.count == 1)
   }
 }
+
+@MainActor
+@Suite struct StoreScopeReentrancyTests {
+  @Test func creatingAScopedStoreWhileAScopedStoreIsNotifyingDoesNotCrash() {
+    let store = Store(initialState: AppState(), reducer: reducer)
+    let counter = store.scope(state: \.counter, action: AppAction.counter)
+    let created = Locked(false)
+    withObservationTracking {
+      _ = counter.count
+    } onChange: {
+      // 子の Store の通知の中（親が子に知らせている最中）に、別の子の Store を作る。
+      MainActor.assumeIsolated {
+        _ = store.scope(state: \.other, action: { (_: Never) -> AppAction in })
+      }
+      created.withLock { $0 = true }
+    }
+    store.dispatch(.counter(.increment))
+    #expect(created.withLock { $0 })
+    #expect(counter.count == 1)
+  }
+}

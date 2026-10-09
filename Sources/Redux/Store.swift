@@ -22,8 +22,9 @@ public final class Store<State: Sendable, Action: Sendable>: Observable {
   private let middleware: [any Middleware<State, Action>]
   // `@Observable` マクロを使わないのは、5.4 のキーパス単位の通知を自前で行うため。
   private let registrar = ObservationRegistrar()
-  // 読まれたキーパスごとの、新旧の State で値が変わったかを判定する関数。
-  // キーは State 上のキーパス。要素数はコード中で使われるキーパスの種類数で頭打ちになるため、削除しない。
+  // 読まれたキーパスごとの、新旧の State で値が変わったかを判定する関数。キーは State 上のキーパス。
+  // 値が変わって通知したキーパスは外す（Observation の購読は 1 回通知されると外れ、読み直したときに
+  // 登録し直されるため）。外さないと、`\.items[id: id]` のように値ごとに異なるキーパスが溜まり続ける。
   private var trackedKeyPaths: [AnyKeyPath: TrackedKeyPath] = [:]
   // TrackedState の中で読まれたキーパス（State から）ごとの、値が変わったかを判定する関数。
   // 読み取りは TrackedState の値のコピーから行われ、メインアクター外で起き得るため、ロックで守る。
@@ -33,7 +34,8 @@ public final class Store<State: Sendable, Action: Sendable>: Observable {
   // scope で作った Store では、Action を親の Store に送る関数。親を強参照するので、子がある間は親も残る。
   private let forward: ((Action) -> Void)?
   // scope で作った子の Store に、State の変化を伝える関数。子が解放されていたら false を返す。
-  private var children: [(State, State) -> Bool] = []
+  private var children: [Int: (State) -> Bool] = [:]
+  private var nextChildID = 0
 
   /// Store を作ります。
   ///
@@ -134,7 +136,8 @@ public final class Store<State: Sendable, Action: Sendable>: Observable {
     let child = Store<ChildState, ChildAction>(
       scopedState: toChildState(currentState),
       forward: { self.dispatch(embed($0)) })
-    children.append { [weak child] _, newState in
+    defer { nextChildID += 1 }
+    children[nextChildID] = { [weak child] newState in
       guard let child else { return false }
       child.update(to: toChildState(newState))
       return true
@@ -203,25 +206,45 @@ public final class Store<State: Sendable, Action: Sendable>: Observable {
   /// State を新しい値にし、変わったキーパスを読んでいる側と、scope で作った子の Store に知らせる。
   private func update(to newState: State) {
     let oldState = currentState
-    let stateChanged = !isEqualIfEquatable(oldState, newState)
-    let changed = trackedKeyPaths.values.filter { $0.hasChanged(oldState, newState) }
-    let nestedChanged = nestedKeyPaths.withLock { $0 }
+    // State が Equatable で変わっていなければ、どのキーパスの値も変わっていないので比べない。
+    guard !isEqualIfEquatable(oldState, newState) else {
+      currentState = newState
+      return
+    }
+    let changedEntries = trackedKeyPaths.filter { $0.value.hasChanged(oldState, newState) }
+    let changed = Array(changedEntries.values)
+    let changedNestedPaths = nestedKeyPaths.withLock { $0 }
       .filter { $0.value(oldState, newState) }
-      .map { \Store[trackedPath: $0.key] }
+      .map(\.key)
+    let nestedChanged = changedNestedPaths.map { \Store[trackedPath: $0] }
+    // 通知する前に外す。通知を受けた側が読み直したら、その読み取りで登録し直される。
+    for key in changedEntries.keys { trackedKeyPaths[key] = nil }
+    nestedKeyPaths.withLock { entries in
+      for path in changedNestedPaths { entries[path] = nil }
+    }
 
     // withMutation を使わないのは、変わったキーパスが複数あり、
     // 全部の willSet → 代入 → 全部の didSet の順にしないと、通知を受けた側が途中の State を見るため。
-    if stateChanged { registrar.willSet(self, keyPath: \.state) }
+    registrar.willSet(self, keyPath: \.state)
     for tracked in changed { tracked.willSet(self) }
     for keyPath in nestedChanged { registrar.willSet(self, keyPath: keyPath) }
     currentState = newState
-    if stateChanged { registrar.didSet(self, keyPath: \.state) }
+    registrar.didSet(self, keyPath: \.state)
     for tracked in changed { tracked.didSet(self) }
     for keyPath in nestedChanged { registrar.didSet(self, keyPath: keyPath) }
-    // State が変わらなければ、子の State（State から取り出した値）も変わらないので知らせない。
-    if stateChanged, !children.isEmpty {
-      children.removeAll { notify in !notify(oldState, newState) }
+    notifyChildren(of: newState)
+  }
+
+  /// scope で作った子の Store に、新しい State を知らせる。
+  private func notifyChildren(of newState: State) {
+    // 写しを回すのは、知らせた先（Observation の通知）で scope が呼ばれ、children に追加されても
+    // 回している最中の配列を書き換えないため（書き換えると排他アクセス違反で停止する）。
+    let current = children
+    var released: [Int] = []
+    for (id, notify) in current where !notify(newState) {
+      released.append(id)
     }
+    for id in released { children[id] = nil }
   }
 
   private func trackedKeyPath<Value: Equatable>(
