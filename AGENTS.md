@@ -108,6 +108,31 @@
 ```sh
 swift build
 swift test
-swift format lint --strict --recursive --parallel Package.swift Sources Tests
-swift format --in-place --recursive --parallel Package.swift Sources Tests
+# CI と同じく、このパッケージのターゲットの警告をエラーにする（理由は Package.swift を参照）
+SWIFT_REDUX_SAGA_WARNINGS_AS_ERRORS=1 swift build --build-tests
+
+# フォーマット（Examples も対象）
+swift format lint --strict --recursive --parallel Package.swift Sources Tests Examples
+swift format --in-place --recursive --parallel Package.swift Sources Tests Examples
+
+# iOS シミュレータ向けのテスト（マクロを使うので -skipMacroValidation が必要）
+xcodebuild test -scheme swift-redux-saga-Package \
+  -destination "platform=iOS Simulator,name=iPhone 17" -skipMacroValidation
+
+# Example のロジックのテストとアプリのビルド
+(cd Examples/ExampleKit && swift test)
+xcodebuild build -project Examples/Examples.xcodeproj -scheme SwiftUIExample \
+  -destination "generic/platform=iOS Simulator" -skipMacroValidation
+
+# ドキュメント（DocC）の警告の確認
+xcodebuild docbuild -scheme swift-redux-saga-Package -destination "generic/platform=macOS" -skipMacroValidation
+```
+
+## フレーキーなテストを入れないための確認
+
+並行処理を変更した PR は、マージ前にテストを並列で繰り返し実行して、失敗が 0 であることを確かめる。
+
+```sh
+swift build --build-tests
+for p in 1 2 3 4; do (for i in $(seq 1 10); do swift test --skip-build 2>&1 | grep -E '✘|Fatal' ; done) & done; wait
 ```

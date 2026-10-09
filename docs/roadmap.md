@@ -92,3 +92,18 @@
 | --- | --- | --- |
 | 10-1 | `feature/binding-action` | 入力欄の Binding（`BindableState` / `BindingAction` / `BindableAction`） （[#35](https://github.com/mitsuharu/swift-redux-saga/pull/35)） |
 | 10-2 | `feature/nested-observation` | ネストしたプロパティ単位の Observation 追跡（マクロ） （[#37](https://github.com/mitsuharu/swift-redux-saga/pull/37)） |
+| 10-3 | `feature/logging-middleware` | `LoggingMiddleware`（os.Logger、デバッグビルドのみ） （[#43](https://github.com/mitsuharu/swift-redux-saga/pull/43)） |
+| 10-4 | `feature/persistence` | State の永続化（`ReduxPersistence`） （[#44](https://github.com/mitsuharu/swift-redux-saga/pull/44)） |
+| 10-5 | `feature/example-mvvm` | Example を MVVM と併用する形にする、`ObservationToken.observe` （[#45](https://github.com/mitsuharu/swift-redux-saga/pull/45)） |
+
+## M11: 0.1.0 に向けた見直し
+
+| # | ブランチ | 内容 |
+| --- | --- | --- |
+| 11-1 | `fix/channel-multiple-takers` | `SagaChannel` を複数の Saga で読むと固まる不具合 （[#38](https://github.com/mitsuharu/swift-redux-saga/pull/38)） |
+| 11-2 | `fix/tracked-state-untracked-properties` | `@TrackedState` で追跡できないプロパティの通知漏れ （[#39](https://github.com/mitsuharu/swift-redux-saga/pull/39)） |
+| 11-3 | `fix/production-safety` | Activity の不整合で落ちない、エラーログのプライバシー （[#40](https://github.com/mitsuharu/swift-redux-saga/pull/40)） |
+| 11-4 | `ci/other-platforms` | tvOS / watchOS / visionOS のビルドを CI に追加 （[#41](https://github.com/mitsuharu/swift-redux-saga/pull/41)） |
+| 11-5 | `refactor/shared-advance` | 時計を進める処理を `TestClock` にまとめる （[#42](https://github.com/mitsuharu/swift-redux-saga/pull/42)） |
+| 11-6 | `docs/review` | ドキュメントの見直し、プロダクトを用途ごとに使えるようにする |
+| 11-7 | `docs/release-0.1.0` | 0.1.0 のリリース（CHANGELOG、README のインストール手順） |

@@ -25,6 +25,13 @@ public enum AppStore {
   public static func make(
     useCase: TodoUseCase, storage: some PersistenceStorage = UserDefaultsStorage()
   ) -> Store<State, Action> {
+    makeComponents(useCase: useCase, storage: storage).store
+  }
+
+  /// Store と、Saga を載せたミドルウェアを作る。テストで Saga を待ち合わせるために、ミドルウェアも返す。
+  static func makeComponents(
+    useCase: TodoUseCase, storage: some PersistenceStorage
+  ) -> (store: Store<State, Action>, sagaMiddleware: SagaMiddleware<State, Action>) {
     let persistence = preferencesPersistence(storage: storage)
     let sagaMiddleware = SagaMiddleware<State, Action>()
     let store = Store(
@@ -40,6 +47,6 @@ public enum AppStore {
       ]
     )
     sagaMiddleware.run(TodoSagas(useCase: useCase).root)
-    return store
+    return (store, sagaMiddleware)
   }
 }

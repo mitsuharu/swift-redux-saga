@@ -19,7 +19,7 @@ swift-redux-saga の設計方針です。公開 API を変更する PR は、こ
 11. [ロックイン回避](#11-ロックイン回避)
 12. [マクロ（任意）](#12-マクロ任意)
 13. [旧実装（ReSwift-Saga）からの変更点](#13-旧実装reswift-sagaからの変更点)
-14. [未決事項](#14-未決事項)
+14. [決定事項](#14-決定事項)
 
 ---
 
@@ -62,7 +62,7 @@ OS の下限は Observation（iOS 17 / macOS 14 など）で決まります。
 - `Observations`（Swift 6.2 の標準ライブラリ。OS 側は iOS 26 / macOS 26 などで利用可能）を `#if compiler` なしで参照したい。
 - App Store への提出は Xcode 26 以降が前提になっているため、利用者側の制約は小さい。
 
-Swift 6.0 / 6.1 を残すかどうかは[要確認事項](#14-未決事項)です。
+Swift 6.0 / 6.1 は対象にしないことにしました（[14 章](#14-決定事項)）。
 
 ### Observation 関連 API の OS 対応（Apple 公式ドキュメントで確認済み）
 
@@ -114,15 +114,19 @@ Redux ◀── ReduxSaga ──▶ Saga
 
 ### プロダクト
 
-| プロダクト | ターゲット |
-| --- | --- |
-| `Redux` | `Redux` |
-| `Saga` | `Saga` |
-| `ReduxSaga` | `Redux`, `Saga`, `ReduxSaga` |
-| `ReduxSwiftUI` | `ReduxSwiftUI` |
-| `ReduxUIKit` | `ReduxUIKit` |
-| `SagaTesting` | `SagaTesting` |
-| `ReduxTesting` | `ReduxTesting` |
+各プロダクトは、使うのに必要なターゲットを含める（`ReduxSaga` だけを追加すれば `Redux` と `Saga` も `import` できる）。利用者が用途ごとに 1 つ選べば済むようにするため。
+
+| プロダクト | ターゲット | 用途 |
+| --- | --- | --- |
+| `Redux` | `Redux` | Redux だけを使う |
+| `Saga` | `Saga` | Saga だけを、ほかの状態管理と組み合わせて使う |
+| `ReduxSaga` | `Redux`, `Saga`, `ReduxSaga` | Redux と Saga を使う |
+| `ReduxSwiftUI` | `Redux`, `ReduxSwiftUI` | SwiftUI のヘルパー |
+| `ReduxUIKit` | `Redux`, `ReduxUIKit` | UIKit のヘルパー（watchOS では空） |
+| `ReduxMacros` | `Redux`, `ReduxMacros` | マクロ |
+| `ReduxPersistence` | `Redux`, `ReduxPersistence` | State の永続化 |
+| `SagaTesting` | `Saga`, `SagaTesting` | Saga のテスト |
+| `ReduxTesting` | `Redux`, `Saga`, `ReduxSaga`, `SagaTesting`, `ReduxTesting` | Store と Saga のテスト |
 
 ---
 
@@ -1111,16 +1115,24 @@ enum Counter {
 
 ---
 
-## 14. 未決事項
+## 14. 決定事項
 
-PR の「要確認事項」と同じ内容です。決まったらこの章を更新します。
+設計 PR（#1）の「要確認事項」で確認し、決まった内容です。
 
-1. **ライセンス**: MIT でよいか。
-2. **Swift ツールチェーンの下限**: Swift 6.2（Xcode 26）以降としてよいか。6.0 / 6.1 も対象にする場合、default isolation のテストや `Observations` の扱いが `#if` で複雑になる。
-3. **OS の下限**: iOS 17 / macOS 14 / tvOS 17 / watchOS 10 / visionOS 1 でよいか。iOS 18 / macOS 15 以上にすれば `Synchronization.Mutex` に統一できるが、利用者の幅が狭まる。
-4. **Action の表現**: `Store<State, Action>` のジェネリクスで enum とプロトコル存在型の両方を許す方針でよいか。
-5. ~~**プロパティ単位の追跡（5.4）**~~: 自前の `ObservationRegistrar` とキーパス比較で実現した（M1-5）。
-6. **`put` の意味**: reducer の適用完了まで待つ（`await`）方針でよいか。redux-saga の `put` はスケジューリングされるだけで、厳密には異なる。
-7. **ターゲット分割**: `Redux` に Slice / Selector / EntityAdapter まで含める（RTK 相当を別ターゲットにしない）方針でよいか。
-8. **Example の形式**: `Examples/` 配下にローカルパッケージ（Domain / AppFeature）と Xcode プロジェクト（SwiftUI / UIKit アプリ）を置く方針でよいか。
-9. **Linux CI**: UI に依存しないターゲットのビルドとテストを Linux（公式 `swift` コンテナイメージ）でも行う方針でよいか。
+1. **ライセンス**: MIT。
+2. **Swift ツールチェーンの下限**: Swift 6.2（Xcode 26）以降。
+3. **OS の下限**: iOS 17 / macOS 14 / tvOS 17 / watchOS 10 / visionOS 1。排他制御は Apple OS では `OSAllocatedUnfairLock`、Linux では `Mutex` を使う（`InternalPrimitives.Locked`）。
+4. **Action の表現**: `Store<State, Action>` のジェネリクスで、enum とプロトコル存在型の両方を許す。Action 専用のプロトコルは設けない（5.1）。
+5. **プロパティ単位の追跡**: 自前の `ObservationRegistrar` とキーパス比較で実現した（5.4）。ネストした値は `@TrackedState` で追跡する。
+6. **`put` の意味**: reducer の適用完了まで待つ（`await`）。
+7. **ターゲット分割**: Slice / Selector / EntityAdapter / LoggingMiddleware は `Redux` に含める。Foundation を使う永続化は `ReduxPersistence` に分ける。
+8. **Example の形式**: `Examples/` にローカルパッケージ（Domain / AppFeature）と Xcode プロジェクト（SwiftUI / UIKit アプリ）を置く。MVVM と併用する。
+9. **Linux CI**: UI に依存しないターゲットのビルドとテストを Linux（公式 `swift` コンテナイメージ）でも行う。
+
+設計書の当初の案から変えた点（理由は各章）:
+
+- dispatch 中の dispatch は禁止せず、キューに積んで後で処理する（5.3）。
+- 起動直後の Action は Saga に届かないことがあるため、起動時の処理はルート Saga に書くか `waitUntilIdle()` で待つ（7 章）。
+- `all` / `race` の処理は `(SagaContext) async throws -> R` を受け取る（6.5）。
+- マクロで Action を取り出す書き方は `.case(\.toggleTapped)`（12 章）。
+- 入力欄の Binding はマクロではなくプロパティラッパー（`@BindableState`）にした（5.10）。
