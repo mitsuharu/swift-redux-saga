@@ -135,8 +135,8 @@ private func makeStore(_ todos: [Todo] = [milk, bread]) -> TestStore<
 @MainActor
 @Suite struct TodoConsecutiveEditTests {
   /// 保存に時間がかかるリポジトリで Store を作り、ログインして、読み込みが終わるまで待つ。
-  private func makeComponents(_ todos: [Todo]) async -> AppStore.Components {
-    let components = AppStore.makeComponents(
+  private func make(_ todos: [Todo]) async -> AppStore.Components {
+    let components = AppStore.make(
       useCase: TodoUseCase(
         repository: InMemoryTodoRepository(todos: todos, latency: .milliseconds(20))),
       authUseCase: AuthUseCase(repository: InMemoryAuthRepository(latency: .zero)),
@@ -147,7 +147,7 @@ private func makeStore(_ todos: [Todo] = [milk, bread]) -> TestStore<
   }
 
   @Test func togglingTheSameTodoTwiceWhileSavingEndsWhereItStarted() async {
-    let components = await makeComponents([milk])
+    let components = await make([milk])
     // 1 回目の保存が終わる前に 2 回目を押す。
     components.store.dispatch(.todo(.toggleTapped(milk.id)))
     components.store.dispatch(.todo(.toggleTapped(milk.id)))
@@ -156,7 +156,7 @@ private func makeStore(_ todos: [Todo] = [milk, bread]) -> TestStore<
   }
 
   @Test func addingWhileAnotherAddIsSavingKeepsBoth() async {
-    let components = await makeComponents([])
+    let components = await make([])
     components.store.dispatch(.todo(.add(title: "eggs")))
     components.store.dispatch(.todo(.add(title: "tea")))
     await components.sagaMiddleware.waitUntilIdle()
