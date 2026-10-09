@@ -284,8 +284,12 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
   ///
   /// 子が失敗したらエラーを投げ、親のタスクグループを失敗させる（兄弟と親がキャンセルされる）。
   /// 子がキャンセルされた場合（個別のキャンセル、親からのキャンセル）はエラーを投げない。
+  ///
+  /// `onFailure` を渡すと、失敗を親に伝えずに、元のエラーを `onFailure` に渡す（`all` / `race` が使う）。
+  /// 子の終わり方を確定する前に呼ぶので、終わりを待っている側は渡したエラーを読める。
   func runForked(
-    _ saga: Saga<State, Action>, state: SagaTaskState, parent: SagaTaskState
+    _ saga: Saga<State, Action>, state: SagaTaskState, parent: SagaTaskState,
+    onFailure: (@Sendable (any Error) -> Void)? = nil
   ) async throws {
     let signal = CancelSignal()
     state.onCancel { signal.fire() }
@@ -313,6 +317,11 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
       if error is CancellationError || state.isCancelRequested || Task.isCancelled {
         parent.childDidFinish(failed: false)
         finish(state, .cancelled)
+      } else if let onFailure {
+        let underlying = (error as? SagaError)?.underlying ?? error
+        onFailure(underlying)
+        parent.childDidFinish(failed: false)
+        finish(state, .failed(underlying))
       } else {
         parent.childDidFinish(failed: true)
         finish(state, .failed((error as? SagaError)?.underlying ?? error))

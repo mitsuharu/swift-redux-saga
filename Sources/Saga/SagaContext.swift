@@ -86,9 +86,14 @@ public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
     fork(saga, waitsForFirstEffect: true)
   }
 
-  /// - Parameter waitsForFirstEffect: 起動中なら、子が最初の Effect に達するまで Action を溜めるか。
-  ///   ヘルパー（`takeEvery` など）は呼び出した時点で購読を始めているので、子を待たない。
-  func fork(_ saga: Saga<State, Action>, waitsForFirstEffect: Bool) -> SagaTask {
+  /// - Parameters:
+  ///   - waitsForFirstEffect: 起動中なら、子が最初の Effect に達するまで Action を溜めるか。
+  ///     ヘルパー（`takeEvery` など）は呼び出した時点で購読を始めているので、子を待たない。
+  ///   - onFailure: 渡すと、子（とその子孫）の失敗を呼び出し元に伝えずに、このハンドラに渡す。
+  func fork(
+    _ saga: Saga<State, Action>, waitsForFirstEffect: Bool,
+    onFailure: (@Sendable (any Error) -> Void)? = nil
+  ) -> SagaTask {
     let state = runtime.makeTaskState(waitsForFirstEffect: waitsForFirstEffect)
     let parent = task
     trigger(.fork(state.id))
@@ -97,7 +102,7 @@ public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
     parent.childDidStart()
     let accepted = forks.push(
       SagaRuntime.ForkRequest { [runtime] in
-        try await runtime.runForked(saga, state: state, parent: parent)
+        try await runtime.runForked(saga, state: state, parent: parent, onFailure: onFailure)
       })
     if !accepted {
       // 呼び出し元の本体が終わった後に fork された（コンテキストを外に持ち出した）場合。
@@ -182,19 +187,25 @@ public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
 
   /// 任意の async 関数を呼びます。
   ///
-  /// `try await function(arguments...)` と直接書くのと同じ結果ですが、呼ぶ前にキャンセルを確認します。
+  /// `try await function(arguments...)` と直接書くのと同じですが、呼ぶ前と戻った後にキャンセルを確認します。
+  /// キャンセルに応じない関数でも、キャンセルされた後の結果は返しません（`takeLatest` で止めた古い結果が
+  /// 新しい結果を上書きしないため）。
   ///
   /// ```swift
   /// let user = try await ctx.call(fetchUser.execute, id)
   /// ```
   ///
-  /// - Throws: 呼ぶ前にキャンセルされていれば `CancellationError`。関数が投げたエラーはそのまま投げます。
+  /// - Throws: 呼ぶ前か、呼んでいる間にキャンセルされていれば `CancellationError`。関数が投げたエラーはそのまま投げます。
   public func call<each Argument, Result>(
     _ function: (repeat each Argument) async throws -> Result,
     _ arguments: repeat each Argument
   ) async throws -> Result {
     trigger(.call)
     try Task.checkCancellation()
-    return try await function(repeat each arguments)
+    let result = try await function(repeat each arguments)
+    // キャンセルに応じない関数（コールバックを async にしたものなど）は、キャンセルされても値を返す。
+    // そのまま返すと、takeLatest で止めたはずの古い結果が put され、新しい結果を上書きするため、戻った後も確かめる。
+    try Task.checkCancellation()
+    return result
   }
 }
