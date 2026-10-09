@@ -77,5 +77,6 @@ private struct TodoRow: View {
   TodoListView(
     viewModel: TodoListViewModel(
       store: AppStore.make(
-        useCase: TodoUseCase(repository: InMemoryTodoRepository(latency: .zero)))))
+        useCase: TodoUseCase(repository: InMemoryTodoRepository(latency: .zero))
+      ).scope(state: \.todo, action: RootFeature.Action.todo)))
 }

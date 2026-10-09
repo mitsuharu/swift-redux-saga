@@ -172,9 +172,16 @@ let fetch = ActionPattern<AppAction, User.ID>.case {
 let id = try await ctx.take(fetch)
 ```
 
-#### 機能ごとの Saga を組み合わせる
+#### 機能ごとの Store と Saga を組み合わせる
 
-機能ごとにモジュールを分ける場合、子の Saga（`Saga<Todo.State, Todo.Action>`）を、子の型のまま親（`AppState` / `AppAction`）に接続できます。Reducer の `scope` と同じ考え方です。子の Saga の `select` は子の State を返し、`take` には子の Action が届き、`put` は親の Action に包んで発行します。
+機能ごとにモジュールを分ける場合、機能の View や ViewModel には、アプリ全体の Store を `scope` した Store を渡せます。機能のモジュールは、アプリ全体の `AppState` / `AppAction` を知らずに、機能の型の Store だけで書けます。読み取りの追跡はプロパティ単位のままです。
+
+```swift
+let todoStore = store.scope(state: \.todo, action: AppAction.todo)   // Store<Todo.State, Todo.Action>
+TodoListView(viewModel: TodoListViewModel(store: todoStore))
+```
+
+Saga も同じく、子の Saga（`Saga<Todo.State, Todo.Action>`）を、子の型のまま親（`AppState` / `AppAction`）に接続できます。Reducer の `scope` と同じ考え方です。子の Saga の `select` は子の State を返し、`take` には子の Action が届き、`put` は親の Action に包んで発行します。
 
 ```swift
 // 起動時に接続する
@@ -186,7 +193,7 @@ _ = try await ctx.take(.case(\.logoutTapped))
 ctx.cancel(session)
 ```
 
-`action:` には `@ActionCases` が生成する case のプロパティ（`\.todo`）を、`embed:` には case（`AppAction.todo`）を渡します。
+Saga の `action:` には `@ActionCases` が生成する case のプロパティ（`\.todo`）を、`embed:` と Store の `scope` の `action:` には case（`AppAction.todo`）を渡します。
 
 #### Saga の寿命（画面の表示・ログイン）
 
@@ -522,7 +529,7 @@ try await store.finish()
 
 ## サンプル
 
-[`Examples/`](Examples) に、ロックインを避ける推奨構成の ToDo アプリ（SwiftUI / UIKit）があります。ログイン（`AuthFeature`）と ToDo（`TodoFeature`）の 2 つの機能を、それぞれの State・Action・Saga のまま親（`RootFeature`）に接続しています。
+[`Examples/`](Examples) に、ロックインを避ける推奨構成の ToDo アプリ（SwiftUI / UIKit）があります。ログイン（`AuthFeature`）と ToDo（`TodoFeature`）の 2 つの機能を、それぞれの State・Action・Saga のまま親（`RootFeature`）に接続しています。ToDo の ViewModel は、アプリ全体の Store を `scope` した ToDo の Store だけを使います。
 
 ```
 Examples/

@@ -30,6 +30,10 @@ public final class Store<State: Sendable, Action: Sendable>: Observable {
   private let nestedKeyPaths = Locked<[SendableKeyPath: @Sendable (State, State) -> Bool]>([:])
   private var pendingActions: [Action] = []
   private var isDispatching = false
+  // scope で作った Store では、Action を親の Store に送る関数。親を強参照するので、子がある間は親も残る。
+  private let forward: ((Action) -> Void)?
+  // scope で作った子の Store に、State の変化を伝える関数。子が解放されていたら false を返す。
+  private var children: [(State, State) -> Bool] = []
 
   /// Store を作ります。
   ///
@@ -45,6 +49,7 @@ public final class Store<State: Sendable, Action: Sendable>: Observable {
     self.currentState = initialState
     self.reducer = reducer
     self.middleware = middleware
+    self.forward = nil
     let api = MiddlewareAPI(store: self)
     for middleware in middleware {
       middleware.attach(to: api)
@@ -103,6 +108,56 @@ public final class Store<State: Sendable, Action: Sendable>: Observable {
     return currentState[keyPath: keyPath]
   }
 
+  /// State と Action の一部だけを扱う Store を作ります（機能ごとの画面に渡すため）。
+  ///
+  /// 作った Store は State を持たず、この Store の State から `state` で取り出した値を読みます。
+  /// dispatch した Action は `action` で包んで、この Store に送ります。機能ごとのモジュールの View や
+  /// ViewModel が、アプリ全体の `AppState` / `AppAction` を知らずに、機能の型の Store だけで書けます
+  /// （Reducer の `scope`、Saga の `run(_:state:action:embed:)` と同じ考え方）。
+  ///
+  /// ```swift
+  /// let todoStore = store.scope(state: \.todo, action: AppAction.todo)
+  /// TodoListView(store: todoStore)   // Store<TodoFeature.State, TodoFeature.Action>
+  /// ```
+  ///
+  /// 読み取りの追跡は、作った Store でもプロパティ単位です。呼ぶたびに新しい Store を作るので、
+  /// View の `body` の中で毎回呼ぶより、ViewModel や親の View で作って渡してください。
+  ///
+  /// - Parameters:
+  ///   - state: この Store の State から、子の State を取り出す関数。
+  ///   - action: 子の Action を、この Store の Action に包む関数（enum の case など）。
+  /// - Returns: 子の State と Action を扱う Store。
+  public func scope<ChildState: Sendable, ChildAction: Sendable>(
+    state toChildState: @escaping (State) -> ChildState,
+    action embed: @escaping (ChildAction) -> Action
+  ) -> Store<ChildState, ChildAction> {
+    let child = Store<ChildState, ChildAction>(
+      scopedState: toChildState(currentState),
+      forward: { self.dispatch(embed($0)) })
+    children.append { [weak child] _, newState in
+      guard let child else { return false }
+      child.update(to: toChildState(newState))
+      return true
+    }
+    return child
+  }
+
+  /// State と Action の一部だけを扱う Store を作ります（State をキーパスで取り出す版）。
+  public func scope<ChildState: Sendable, ChildAction: Sendable>(
+    state: KeyPath<State, ChildState>,
+    action embed: @escaping (ChildAction) -> Action
+  ) -> Store<ChildState, ChildAction> {
+    scope(state: { $0[keyPath: state] }, action: embed)
+  }
+
+  /// scope で作る Store。State を持たず、親から変化を知らされる。
+  private init(scopedState: State, forward: @escaping (Action) -> Void) {
+    self.currentState = scopedState
+    self.reducer = .empty
+    self.middleware = []
+    self.forward = forward
+  }
+
   /// Observation の追跡に登録せずに State を読む（ミドルウェア用）。
   var untrackedState: State {
     currentState
@@ -114,6 +169,10 @@ public final class Store<State: Sendable, Action: Sendable>: Observable {
   /// dispatch の処理中（Observation の通知の中など）に呼ばれた Action は、
   /// 処理中の Action が終わった後に、呼ばれた順に処理します。
   public func dispatch(_ action: Action) {
+    if let forward {
+      forward(action)
+      return
+    }
     pendingActions.append(action)
     // 再入時にその場で処理しないのは、通知の途中で State が書き換わり、
     // 先に呼ばれた Action より後の Action の結果が先に見えてしまうため。
@@ -136,10 +195,14 @@ public final class Store<State: Sendable, Action: Sendable>: Observable {
   }
 
   private func apply(_ action: Action) {
-    let oldState = currentState
-    var newState = oldState
+    var newState = currentState
     reducer.reduce(into: &newState, action: action)
+    update(to: newState)
+  }
 
+  /// State を新しい値にし、変わったキーパスを読んでいる側と、scope で作った子の Store に知らせる。
+  private func update(to newState: State) {
+    let oldState = currentState
     let stateChanged = !isEqualIfEquatable(oldState, newState)
     let changed = trackedKeyPaths.values.filter { $0.hasChanged(oldState, newState) }
     let nestedChanged = nestedKeyPaths.withLock { $0 }
@@ -155,6 +218,10 @@ public final class Store<State: Sendable, Action: Sendable>: Observable {
     if stateChanged { registrar.didSet(self, keyPath: \.state) }
     for tracked in changed { tracked.didSet(self) }
     for keyPath in nestedChanged { registrar.didSet(self, keyPath: keyPath) }
+    // State が変わらなければ、子の State（State から取り出した値）も変わらないので知らせない。
+    if stateChanged, !children.isEmpty {
+      children.removeAll { notify in !notify(oldState, newState) }
+    }
   }
 
   private func trackedKeyPath<Value: Equatable>(

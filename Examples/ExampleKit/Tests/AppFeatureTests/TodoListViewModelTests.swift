@@ -22,7 +22,10 @@ import Testing
     // 読み込み（refresh → loaded）を待たずに操作すると、後から届いた loaded が
     // 追加した ToDo を上書きするため、Saga が止まるまで待つ。
     await sagaMiddleware.waitUntilIdle()
-    return (TodoListViewModel(store: store), sagaMiddleware)
+    return (
+      TodoListViewModel(store: store.scope(state: \.todo, action: RootFeature.Action.todo)),
+      sagaMiddleware
+    )
   }
 
   @Test func typingADraftEnablesAdding() async {
