@@ -188,21 +188,29 @@ public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
   /// 任意の async 関数を呼びます。
   ///
   /// `try await function(arguments...)` と直接書くのと同じですが、呼ぶ前と戻った後にキャンセルを確認します。
-  /// キャンセルに応じない関数でも、キャンセルされた後の結果は返しません（`takeLatest` で止めた古い結果が
-  /// 新しい結果を上書きしないため）。
+  /// キャンセルされた後は、関数の結果もエラーも返さず `CancellationError` を投げます（`takeLatest` で止めた
+  /// 古い結果や失敗が、新しい結果を上書きしないため）。
   ///
   /// ```swift
   /// let user = try await ctx.call(fetchUser.execute, id)
   /// ```
   ///
-  /// - Throws: 呼ぶ前か、呼んでいる間にキャンセルされていれば `CancellationError`。関数が投げたエラーはそのまま投げます。
+  /// - Throws: 呼ぶ前か、呼んでいる間にキャンセルされていれば `CancellationError`。それ以外は、関数が投げたエラーをそのまま投げます。
   public func call<each Argument, Result>(
     _ function: (repeat each Argument) async throws -> Result,
     _ arguments: repeat each Argument
   ) async throws -> Result {
     trigger(.call)
     try Task.checkCancellation()
-    let result = try await function(repeat each arguments)
+    let result: Result
+    do {
+      result = try await function(repeat each arguments)
+    } catch {
+      // キャンセルされた後のエラー（URLError(.cancelled) など CancellationError 以外も）をそのまま投げると、
+      // ワーカーの一般的な catch が古い失敗を Action にするため、キャンセルとして投げる。
+      try Task.checkCancellation()
+      throw error
+    }
     // キャンセルに応じない関数（コールバックを async にしたものなど）は、キャンセルされても値を返す。
     // そのまま返すと、takeLatest で止めたはずの古い結果が put され、新しい結果を上書きするため、戻った後も確かめる。
     try Task.checkCancellation()

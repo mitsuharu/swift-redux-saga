@@ -10,6 +10,7 @@
 
 ### 修正
 
+- `call`: キャンセルされた後に関数が `CancellationError` 以外のエラー（`URLError(.cancelled)` など）を投げると、そのまま投げていた。ワーカーの一般的な `catch` が古い失敗を Action にし、新しい結果を上書きし得た。キャンセル後は `CancellationError` を投げる
 - `EntityAdapter.updateOne` / `updateMany`: 更新で ID をすでにある ID に変えると、`ids` に同じ ID が 2 つ並んだ。すでにあるエンティティを置き換える（Redux Toolkit と同じ）
 - `observe` / `ObservationToken.observe`: 購読を解除（`cancel()` / トークンの解放）しても、監視している値が次に変わるまで、ハンドラが捕捉したオブジェクトを保持していた。解除した時点で手放す
 - `call`: キャンセルに応じない関数が、キャンセルされた後に値を返すと、その値を返していた。`takeLatest` で止めた古い結果が新しい結果を上書きし得た。戻った後もキャンセルを確認する

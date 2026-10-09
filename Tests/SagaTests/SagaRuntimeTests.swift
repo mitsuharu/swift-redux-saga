@@ -419,4 +419,35 @@ private struct TestError: Error, Equatable {}
     #expect(host.dispatched == [.loaded(102)])
     runtime.stop()
   }
+
+  @Test func callThrowsCancellationInsteadOfAnErrorThrownAfterCancellation() async throws {
+    let host = makeHost()
+    let runtime = host.makeRuntime()
+    let gate = Locked<CheckedContinuation<Void, any Error>?>(nil)
+    let (started, startedContinuation) = AsyncStream.makeStream(of: Void.self)
+    let task = runtime.run(
+      Saga { ctx in
+        do {
+          // キャンセルされると、CancellationError 以外のエラー（URLError(.cancelled) など）を投げる関数。
+          try await ctx.call { () async throws in
+            try await withCheckedThrowingContinuation { continuation in
+              gate.withLock { $0 = continuation }
+              startedContinuation.yield()
+            }
+          }
+        } catch is CancellationError {
+          throw CancellationError()
+        } catch {
+          await ctx.put(.add(-1))  // ワーカーの一般的な catch。古い失敗を Action にしてしまう
+        }
+      })
+    var iterator = started.makeAsyncIterator()
+    await iterator.next()
+    task.cancel()
+    gate.withLock { $0 }?.resume(throwing: TransportCancelled())
+    await #expect(throws: CancellationError.self) { try await task.join() }
+    #expect(host.dispatched.isEmpty)
+  }
 }
+
+private struct TransportCancelled: Error {}
