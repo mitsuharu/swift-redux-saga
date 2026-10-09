@@ -135,3 +135,42 @@ private let fetch = ActionPattern<Action, Int>.case {
     return (task, { weakStore })
   }
 }
+
+private enum CounterAction: Sendable, Equatable {
+  case fetch
+  case loaded(Int)
+}
+
+private struct ParentState: Sendable, Equatable {
+  var counter = 0
+}
+
+private enum ParentAction: Sendable, Equatable {
+  case counter(CounterAction)
+
+  var counter: CounterAction? {
+    if case .counter(let action) = self { action } else { nil }
+  }
+}
+
+@MainActor
+@Suite struct SagaMiddlewareScopeTests {
+  @Test func aChildSagaRunsOnTheStoreWithItsOwnTypes() async {
+    let middleware = SagaMiddleware<ParentState, ParentAction>()
+    let store = Store(
+      initialState: ParentState(),
+      reducer: Reducer { state, action in
+        if case .counter(.loaded(let value)) = action { state.counter = value }
+      },
+      middleware: [middleware])
+    let child = Saga<Int, CounterAction> { ctx in
+      ctx.takeEvery(.action(.fetch)) { ctx, _ in
+        await ctx.put(.loaded(await ctx.select { $0 } + 10))
+      }
+    }
+    middleware.run(child, state: \.counter, action: \.counter, embed: ParentAction.counter)
+    store.dispatch(.counter(.fetch))
+    await middleware.waitUntilIdle()
+    #expect(store.counter == 10)
+  }
+}

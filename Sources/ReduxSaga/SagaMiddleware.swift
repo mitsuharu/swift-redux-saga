@@ -51,6 +51,37 @@ public final class SagaMiddleware<State: Sendable, Action: Sendable>: Middleware
     return runtime.run(saga)
   }
 
+  /// 子の State・Action で書いた Saga を、Store の State・Action に接続して起動します。
+  ///
+  /// 機能ごとに分けたモジュールの Saga を、子の型のまま動かせます（Reducer の `scope` と同じ考え方）。
+  /// 詳しくは `SagaRuntime.run(_:state:action:embed:)` を参照してください。
+  ///
+  /// ```swift
+  /// sagaMiddleware.run(todoSagas.root, state: \.todo, action: \.todo, embed: AppAction.todo)
+  /// ```
+  @discardableResult
+  public func run<ChildState: Sendable, ChildAction: Sendable>(
+    _ saga: Saga<ChildState, ChildAction>,
+    state: KeyPath<State, ChildState> & Sendable,
+    action: KeyPath<Action, ChildAction?> & Sendable,
+    embed: @escaping @Sendable (ChildAction) -> Action
+  ) -> SagaTask {
+    precondition(host.isAttached, "Create the Store with this middleware before calling run(_:).")
+    return runtime.run(saga, state: state, action: action, embed: embed)
+  }
+
+  /// 子の Saga を、関数で Store の State・Action に接続して起動します。
+  @discardableResult
+  public func run<ChildState: Sendable, ChildAction: Sendable>(
+    _ saga: Saga<ChildState, ChildAction>,
+    state: @escaping @Sendable (State) -> ChildState,
+    action: @escaping @Sendable (Action) -> ChildAction?,
+    embed: @escaping @Sendable (ChildAction) -> Action
+  ) -> SagaTask {
+    precondition(host.isAttached, "Create the Store with this middleware before calling run(_:).")
+    return runtime.run(saga, state: state, action: action, embed: embed)
+  }
+
   /// すべての Saga が Effect（`take` / `join` / `delay` など）で止まるまで待ちます。
   ///
   /// テストで、Saga の処理が終わったことを確かめてから State を確認する場合などに使います。

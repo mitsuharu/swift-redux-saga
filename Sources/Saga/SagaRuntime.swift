@@ -20,11 +20,20 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
   let host: any SagaHost<State, Action>
   let clock: any Clock<Duration>
   let monitor: (any SagaMonitor)?
-  private let onError: @Sendable (SagaError) -> Void
-  package let activity = Activity()
+  let onError: @Sendable (SagaError) -> Void
+  package let activity: Activity
   let multicaster: ActionMulticaster<Action>
   private let rootTasks = Locked(RootTasks())
-  private let nextID = Locked(0)
+  private let nextID: Locked<Int>
+  private let nextScopeID = Locked(0)
+  /// 接続した子のランタイム（``run(_:state:action:embed:)``）。キーは接続ごとの番号。
+  let scopes = Locked<[Int: ScopedRuntime]>([:])
+
+  /// 接続した子のランタイムに、Action を届けたり止めたりする関数。
+  struct ScopedRuntime: Sendable {
+    let emit: @Sendable (Action) -> Void
+    let stop: @Sendable () -> Void
+  }
 
   private let startup = Locked(Startup())
 
@@ -53,16 +62,35 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
   ///   - monitor: Saga の起動・終了・Effect を受け取るフック。
   ///   - onError: 根（``run(_:)`` や `spawn` で起動した Saga）まで伝わった未処理のエラーを受け取る関数。
   ///     既定ではログに出力します。
-  public init<Host: SagaHost>(
+  public convenience init<Host: SagaHost>(
     host: Host,
     clock: any Clock<Duration> = ContinuousClock(),
     monitor: (any SagaMonitor)? = nil,
     onError: @escaping @Sendable (SagaError) -> Void = SagaRuntime.logError
   ) where Host.State == State, Host.Action == Action {
+    self.init(
+      host: host, clock: clock, monitor: monitor, onError: onError,
+      activity: Activity(), nextID: Locked(0))
+  }
+
+  /// 親のランタイムと Activity と ID の連番を共有して作る（子のランタイム用）。
+  ///
+  /// Activity を共有するのは、親の ``waitUntilIdle()`` やテストの `settle()` が子の Saga も待つため。
+  /// ID の連番を共有するのは、モニタで親子の Saga の ID が重ならないため。
+  init(
+    host: any SagaHost<State, Action>,
+    clock: any Clock<Duration>,
+    monitor: (any SagaMonitor)?,
+    onError: @escaping @Sendable (SagaError) -> Void,
+    activity: Activity,
+    nextID: Locked<Int>
+  ) {
     self.host = host
     self.clock = clock
     self.monitor = monitor
     self.onError = onError
+    self.activity = activity
+    self.nextID = nextID
     self.multicaster = ActionMulticaster(activity: activity)
     // ランタイムは Activity を所有しているため、弱参照にして循環させない。
     activity.onIdle { [weak self] in self?.deliverStartupActions() }
@@ -101,7 +129,15 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
       return true
     }
     if !isBuffered {
-      multicaster.emit(action)
+      deliver(action)
+    }
+  }
+
+  /// Action を、待っている Saga と、接続した子のランタイムに届ける。
+  private func deliver(_ action: Action) {
+    multicaster.emit(action)
+    for scope in scopes.withLock({ Array($0.values) }) {
+      scope.emit(action)
     }
   }
 
@@ -141,7 +177,7 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
       }
       guard !actions.isEmpty else { return }
       for action in actions {
-        multicaster.emit(action)
+        deliver(action)
       }
     }
   }
@@ -197,6 +233,22 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
   }
 
   /// 起動したすべての Saga をキャンセルします。以降に ``run(_:)`` した Saga はすぐにキャンセルされます。
+  /// 子のランタイムと共有する ID の連番。
+  var nextIDSource: Locked<Int> {
+    nextID
+  }
+
+  func makeScopeID() -> Int {
+    nextScopeID.withLock { id in
+      defer { id += 1 }
+      return id
+    }
+  }
+
+  var isStopped: Bool {
+    rootTasks.withLock { $0.isStopped }
+  }
+
   public func stop() {
     let tasks = rootTasks.withLock { rootTasks -> Set<SagaTask> in
       rootTasks.isStopped = true
@@ -205,6 +257,9 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
     }
     for task in tasks {
       task.cancel()
+    }
+    for scope in scopes.withLock({ Array($0.values) }) {
+      scope.stop()
     }
   }
 
