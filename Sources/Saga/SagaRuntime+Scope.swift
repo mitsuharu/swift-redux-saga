@@ -30,7 +30,7 @@ extension SagaRuntime {
   ) -> SagaTask {
     let child = SagaRuntime<ChildState, ChildAction>(
       host: ScopedHost(parent: host, state: state, embed: embed),
-      clock: clock, monitor: monitor, onError: onError, activity: activity, nextID: nextIDSource)
+      clock: clock, monitor: monitor, onError: onError, activity: activity, nextID: nextID)
     let id = makeScopeID()
     scopes.withLock {
       $0[id] = ScopedRuntime(
