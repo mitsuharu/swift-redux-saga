@@ -241,11 +241,17 @@ import ReduxPersistence
 let persistence = Persistence<AppState, Settings>(
   key: "settings", storage: UserDefaultsStorage(), keyPath: \.settings)
 
+let persistenceMiddleware = PersistenceMiddleware<AppState, AppAction>(persistence)
 let store = Store(
-  initialState: persistence.restore(into: AppState()),            // 起動時に復元
+  initialState: persistence.restore(into: AppState()),   // 起動時に復元
   reducer: appReducer,
-  middleware: [PersistenceMiddleware<AppState, AppAction>(persistence)]   // 変わったら保存
+  middleware: [persistenceMiddleware]                     // 変わったら保存
 )
+
+// 保存は変わってから少し待って（既定 0.5 秒）まとめて行うため、バックグラウンドに入ったらすぐ保存する
+.onChange(of: scenePhase) { _, phase in
+  if phase == .background { Task { await persistenceMiddleware.flush() } }
+}
 ```
 
 保存形式を変えたときは `version` を上げ、`migrate` で古い形式から変換できます。読み込み中やエラーのような一時的な状態は保存しないでください。
