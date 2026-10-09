@@ -25,7 +25,7 @@ extension SagaContext {
     while !remaining.isEmpty {
       let finished = try await waitForAny(of: tasks, among: remaining)
       remaining.remove(finished)
-      if let error = failure(of: finished, in: repeat each branches) {
+      if case .failed(let error) = outcome(of: finished, in: repeat each branches) {
         for task in tasks { task.cancel() }
         throw error
       }
@@ -65,12 +65,14 @@ extension SagaContext {
     for (index, task) in tasks.enumerated() where index != winner {
       task.cancel()
     }
-    if let error = failure(of: winner, in: repeat each branches) {
+    switch outcome(of: winner, in: repeat each branches) {
+    case .completed:
+      break
+    case .failed(let error):
       throw error
-    }
-    // 勝者が値も失敗も残さずに終わった（キャンセルで終わった）場合、全要素が nil のタプルを返すと
-    // 正常な勝者と区別できないため、キャンセルとして投げる。
-    guard hasValue(winner, in: repeat each branches) else {
+    case .cancelled:
+      // 勝者が値も失敗も残さずに終わった場合、全要素が nil のタプルを返すと
+      // 正常な勝者と区別できないため、キャンセルとして投げる。
       throw CancellationError()
     }
     var index = 0
@@ -90,23 +92,18 @@ extension SagaContext {
       onFailure: { branch.finish(.failure($0)) })
   }
 
-  /// 位置 `index` の処理が値を残して終わったかを返す。
-  private func hasValue<each R>(_ index: Int, in branches: repeat Branch<each R>) -> Bool {
+  /// 位置 `index` の処理の終わり方を返す。値も失敗も残していなければキャンセルとみなす。
+  private func outcome<each R>(of index: Int, in branches: repeat Branch<each R>) -> SagaResult {
     var current = 0
-    var found = false
+    var found = SagaResult.cancelled
     for branch in repeat each branches {
-      if current == index, case .success? = branch.result { found = true }
-      current += 1
-    }
-    return found
-  }
-
-  /// 位置 `index` の処理が失敗していれば、そのエラーを返す。
-  private func failure<each R>(of index: Int, in branches: repeat Branch<each R>) -> (any Error)? {
-    var current = 0
-    var found: (any Error)?
-    for branch in repeat each branches {
-      if current == index, case .failure(let error)? = branch.result { found = error }
+      if current == index {
+        switch branch.result {
+        case .success?: found = .completed
+        case .failure(let error)?: found = .failed(error)
+        case nil: break
+        }
+      }
       current += 1
     }
     return found
@@ -119,15 +116,15 @@ extension SagaContext {
     }
     let activity = runtime.activity
     let gate = Locked<CheckedContinuation<Int, any Error>?>(nil)
-    let fire: @Sendable (Int) -> Void = { index in
-      guard
-        let continuation = gate.withLock({ gate in
-          defer { gate = nil }
-          return gate
-        })
-      else {
-        return
+    // 待機を 1 回だけ取り出す。最初に終わった子とキャンセルのうち、先に来た方だけが再開する。
+    let takeGate: @Sendable () -> CheckedContinuation<Int, any Error>? = {
+      gate.withLock { gate in
+        defer { gate = nil }
+        return gate
       }
+    }
+    let fire: @Sendable (Int) -> Void = { index in
+      guard let continuation = takeGate() else { return }
       activity.begin()
       continuation.resume(returning: index)
     }
@@ -158,14 +155,7 @@ extension SagaContext {
         }
       }
     } onCancel: {
-      guard
-        let continuation = gate.withLock({ gate in
-          defer { gate = nil }
-          return gate
-        })
-      else {
-        return
-      }
+      guard let continuation = takeGate() else { return }
       activity.begin()
       continuation.resume(throwing: CancellationError())
     }

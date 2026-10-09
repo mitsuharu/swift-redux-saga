@@ -9,7 +9,7 @@ import UIKit
 final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
   var window: UIWindow?
 
-  private let app = AppStore.makeComponents(
+  private let app = AppStore.make(
     useCase: TodoUseCase(
       repository: InMemoryTodoRepository(todos: [
         Todo(title: "Read the design doc", createdAt: .now.addingTimeInterval(-60)),

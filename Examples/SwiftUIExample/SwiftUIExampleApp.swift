@@ -9,7 +9,7 @@ import SwiftUI
 @main
 struct SwiftUIExampleApp: App {
   @Environment(\.scenePhase) private var scenePhase
-  @State private var app = AppStore.makeComponents(
+  @State private var app = AppStore.make(
     useCase: TodoUseCase(
       repository: InMemoryTodoRepository(todos: [
         Todo(title: "Read the design doc", createdAt: .now.addingTimeInterval(-60)),

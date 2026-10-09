@@ -11,7 +11,7 @@ public enum AppStore {
   public typealias Action = RootFeature.Action
 
   /// 設定（Preferences）を保存する設定。
-  public static func preferencesPersistence(storage: some PersistenceStorage)
+  static func preferencesPersistence(storage: some PersistenceStorage)
     -> Persistence<State, TodoFeature.Preferences>
   {
     Persistence(key: "preferences", storage: storage, keyPath: \.todo.preferences)
@@ -33,25 +33,11 @@ public enum AppStore {
     }
   }
 
-  /// Store を作り、Saga を起動する。
-  ///
-  /// - Parameters:
-  ///   - useCase: Saga が使う UseCase。プレビューやテストでは差し替える。
-  ///   - authUseCase: ログインの UseCase。
-  ///   - storage: 設定の保存先。
-  public static func make(
-    useCase: TodoUseCase,
-    authUseCase: AuthUseCase = AuthUseCase(repository: InMemoryAuthRepository()),
-    storage: some PersistenceStorage = UserDefaultsStorage()
-  ) -> Store<State, Action> {
-    makeComponents(useCase: useCase, authUseCase: authUseCase, storage: storage).store
-  }
-
-  /// Store と、Saga と保存のミドルウェアを作る。
+  /// Store を作り、Saga を起動する。Store と、Saga と保存のミドルウェアを返す。
   ///
   /// アプリはバックグラウンドに入るときに ``Components/flush()`` を呼ぶ。テストは Saga を待ち合わせるために
   /// ミドルウェアを使う。
-  public static func makeComponents(
+  public static func make(
     useCase: TodoUseCase,
     authUseCase: AuthUseCase = AuthUseCase(repository: InMemoryAuthRepository()),
     storage: some PersistenceStorage = UserDefaultsStorage()

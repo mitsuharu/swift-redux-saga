@@ -280,16 +280,3 @@ public final class Store<State: Sendable, Action: Sendable>: Observable {
     let didSet: (Store) -> Void
   }
 }
-
-/// 値が `Equatable` なら等しいかを返し、そうでなければ `false`（変わったとみなす）を返す。
-private func isEqualIfEquatable<Value>(_ lhs: Value, _ rhs: Value) -> Bool {
-  guard let lhs = lhs as? any Equatable else { return false }
-  return lhs.isEqual(to: rhs)
-}
-
-extension Equatable {
-  fileprivate func isEqual(to other: Any) -> Bool {
-    guard let other = other as? Self else { return false }
-    return self == other
-  }
-}

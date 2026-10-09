@@ -1,6 +1,6 @@
 # swift-redux-saga の CI。
 #
-# PR ごとに次の 4 ジョブを並列に実行する。
+# PR ごとに次のジョブを並列に実行する。
 #   - Format: swift format による lint
 #   - macOS:  SwiftPM でのビルドとテスト
 #   - iOS:    xcodebuild で iOS シミュレータ向けのビルドとテスト
@@ -56,13 +56,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: swift format lint
-        run: |
-          # まだ存在しないディレクトリを渡すと swift format がエラーになるため、あるものだけ渡す。
-          paths="Package.swift"
-          for dir in Sources Tests Examples; do
-            if [ -d "$dir" ]; then paths="$paths $dir"; fi
-          done
-          swift format lint --strict --recursive --parallel $paths
+        run: swift format lint --strict --recursive --parallel Package.swift Sources Tests Examples
 
   macos:
     name: macOS (SwiftPM)
@@ -86,9 +80,7 @@ jobs:
       # -Xswiftc -warnings-as-errors を使わないのは、依存の swift-syntax にも効いてしまうため。
       - name: Build
         run: swift build --build-tests
-      # テストターゲットがないと swift test は失敗するため、Tests ができるまでは実行しない。
       - name: Test
-        if: hashFiles('Tests/**') != ''
         run: swift test --skip-build
 
   ios:
@@ -98,29 +90,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # xcodebuild はパッケージのマクロ（ReduxMacros）を使う前に、利用者の許可を求める。
-      # CI では対話できないので -skipMacroValidation で許可する（マクロはこのリポジトリのコード）。
-      - name: Resolve scheme
-        id: scheme
-        run: |
-          # スキーム名を固定で書かない。プロダクトが 1 つのときはパッケージ名、
-          # 複数になると "<パッケージ名>-Package" になり、ターゲット追加のたびに壊れるため。
-          schemes=$(xcodebuild -list -json | jq -r '.workspace.schemes[]')
-          echo "$schemes"
-          scheme=$(echo "$schemes" | grep -E -- '-Package$' || true)
-          if [ -z "$scheme" ]; then scheme=$(echo "$schemes" | head -n 1); fi
-          echo "name=$scheme" >> "$GITHUB_OUTPUT"
-      # テストがない間はシミュレータを起動する必要がないので、汎用の宛先でビルドだけ行う。
-      - name: Build
-        if: hashFiles('Tests/**') == ''
-        run: |
-          xcodebuild build \
-            -scheme "${{ steps.scheme.outputs.name }}" \
-            -destination "generic/platform=iOS Simulator" \
-            -skipMacroValidation
       - name: Resolve simulator
         id: simulator
-        if: hashFiles('Tests/**') != ''
         run: |
           # 名前と OS で -destination を指定しない。runner の起動直後は CoreSimulator の準備が
           # 終わっておらず、xcodebuild がシミュレータを見つけられずに失敗することがあるため、
@@ -139,11 +110,13 @@ jobs:
             exit 1
           fi
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
+      # xcodebuild はパッケージのマクロ（ReduxMacros）を使う前に、利用者の許可を求める。
+      # CI では対話できないので -skipMacroValidation で許可する（マクロはこのリポジトリのコード）。
+      # スキームは、プロダクトが複数あるパッケージで SwiftPM が作る "<パッケージ名>-Package"。
       - name: Build and test
-        if: hashFiles('Tests/**') != ''
         run: |
           xcodebuild test \
-            -scheme "${{ steps.scheme.outputs.name }}" \
+            -scheme swift-redux-saga-Package \
             -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}" \
             -skipMacroValidation
 
@@ -184,7 +157,6 @@ jobs:
       - name: Build
         run: swift build --build-tests
       - name: Test
-        if: hashFiles('Tests/**') != ''
         run: swift test --skip-build
 
   examples:

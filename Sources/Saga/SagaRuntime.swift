@@ -24,7 +24,7 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
   package let activity: Activity
   let multicaster: ActionMulticaster<Action>
   private let rootTasks = Locked(RootTasks())
-  private let nextID: Locked<Int>
+  let nextID: Locked<Int>
   private let nextScopeID = Locked(0)
   /// 接続した子のランタイム（`run(_:state:action:embed:)`）。キーは接続ごとの番号。
   let scopes = Locked<[Int: ScopedRuntime]>([:])
@@ -233,11 +233,6 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
   }
 
   /// 起動したすべての Saga をキャンセルします。以降に ``run(_:)`` した Saga はすぐにキャンセルされます。
-  /// 子のランタイムと共有する ID の連番。
-  var nextIDSource: Locked<Int> {
-    nextID
-  }
-
   func makeScopeID() -> Int {
     nextScopeID.withLock { id in
       defer { id += 1 }

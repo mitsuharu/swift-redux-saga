@@ -36,10 +36,7 @@ public final class PersistenceMiddleware<State: Sendable, Action: Sendable>: Mid
     // スナップショットが Equatable なら、保存する部分が変わったときだけ保存する。
     // そうでなければ、State が変わるたびに保存する（debounce でまとめられる）。
     self.hasChanged = { old, new in
-      let old = persistence.snapshot(of: old)
-      let new = persistence.snapshot(of: new)
-      guard let old = old as? any Equatable else { return true }
-      return !old.isEqual(to: new)
+      !isEqualIfEquatable(persistence.snapshot(of: old), persistence.snapshot(of: new))
     }
     self.debounce = debounce
     self.clock = clock
@@ -91,12 +88,5 @@ public final class PersistenceMiddleware<State: Sendable, Action: Sendable>: Mid
     }
     pending = (task, isSuperseded)
     lastSave = task
-  }
-}
-
-extension Equatable {
-  fileprivate func isEqual(to other: Any) -> Bool {
-    guard let other = other as? Self else { return false }
-    return self == other
   }
 }

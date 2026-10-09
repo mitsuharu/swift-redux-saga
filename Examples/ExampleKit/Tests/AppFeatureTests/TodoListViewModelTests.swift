@@ -13,7 +13,7 @@ import Testing
   private func makeViewModel(storage: InMemoryStorage = InMemoryStorage()) async
     -> (TodoListViewModel, SagaMiddleware<RootFeature.State, RootFeature.Action>)
   {
-    let components = AppStore.makeComponents(
+    let components = AppStore.make(
       useCase: TodoUseCase(repository: InMemoryTodoRepository(latency: .zero)),
       authUseCase: AuthUseCase(repository: InMemoryAuthRepository(latency: .zero)),
       storage: storage)
