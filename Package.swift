@@ -65,7 +65,9 @@ let package = Package(
       name: "ReduxPersistenceTests",
       dependencies: ["ReduxPersistence", "SagaTesting", "InternalPrimitives"]
     ),
-    .testTarget(name: "ReduxTestingTests", dependencies: ["ReduxTesting", "ReduxSaga", "Saga"]),
+    .testTarget(
+      name: "ReduxTestingTests",
+      dependencies: ["ReduxTesting", "ReduxSaga", "Saga", "InternalPrimitives"]),
     .testTarget(
       name: "ReduxMacrosTests",
       dependencies: [

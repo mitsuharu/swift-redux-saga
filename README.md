@@ -438,6 +438,21 @@ import Testing
 - Store なしで Saga だけを検証する場合は `SagaTesting` の `SagaTester` を使います。
 - `call` で実際の通信など終わらない処理を呼ぶと待ち合わせも終わらないため、テストではスタブを注入してください。
 
+#### 通信が重なる場合のテスト
+
+検索語の連続した変更、通信中のログアウト、結果の到着順の逆転などは、応答をテストから手動で返すスタブで再現します。通信中は Saga が止まらないため、`send` の代わりに待たずに送る `dispatch` を使い、Saga が出す Action は届くまで待つ `receive(_:timeout:)` で確かめます（`SagaTester` にも同じ API があります）。
+
+```swift
+try store.dispatch(.search("a")) { $0.query = "a" }
+try store.dispatch(.search("ab")) { $0.query = "ab" }   // 1 つ目の通信が終わる前に変える
+api.respond(to: "ab", with: "ab results")              // 新しい方が先に戻る
+try await store.receive(.results("ab results"), timeout: .seconds(5)) { $0.results = "ab results" }
+api.respond(to: "a", with: "a results")                // 古い方は takeLatest が止めたので届かない
+try await store.finish()
+```
+
+`finish()` はすべての Saga が止まるまで待つので、その前にスタブの応答をすべて返してください。
+
 ## サンプル
 
 [`Examples/`](Examples) に、ロックインを避ける推奨構成の ToDo アプリ（SwiftUI / UIKit）があります。
