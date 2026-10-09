@@ -359,4 +359,64 @@ private struct TestError: Error, Equatable {}
     #expect(host.dispatched == [.loaded(1)])
     runtime.stop()
   }
+
+  @Test func callDoesNotReturnTheResultOfAFunctionThatFinishedAfterCancellation() async throws {
+    let host = makeHost()
+    let runtime = host.makeRuntime()
+    let gate = Locked<CheckedContinuation<Int, Never>?>(nil)
+    let (started, startedContinuation) = AsyncStream.makeStream(of: Void.self)
+    let task = runtime.run(
+      Saga { ctx in
+        // キャンセルに応じない関数（コールバックを async にしたものなど）。
+        let value = try await ctx.call { () async -> Int in
+          await withCheckedContinuation { continuation in
+            gate.withLock { $0 = continuation }
+            startedContinuation.yield()
+          }
+        }
+        await ctx.put(.loaded(value))
+      })
+    var iterator = started.makeAsyncIterator()
+    await iterator.next()
+    task.cancel()
+    gate.withLock { $0 }?.resume(returning: 1)
+    await #expect(throws: CancellationError.self) { try await task.join() }
+    #expect(host.dispatched.isEmpty)
+  }
+
+  @Test func takeLatestDoesNotPutAnOlderResultAfterANewerOne() async throws {
+    let host = makeHost()
+    let runtime = host.makeRuntime()
+    let gates = Locked<[Int: CheckedContinuation<Int, Never>]>([:])
+    let (started, startedContinuation) = AsyncStream.makeStream(of: Int.self)
+    let (completed, completedContinuation) = AsyncStream.makeStream(of: Void.self)
+    runtime.run(
+      Saga { ctx in
+        ctx.takeLatest(fetch) { ctx, id in
+          // キャンセルに応じない関数（コールバックを async にしたものなど）。
+          let result = try await ctx.call { () async -> Int in
+            await withCheckedContinuation { continuation in
+              gates.withLock { $0[id] = continuation }
+              startedContinuation.yield(id)
+            }
+          }
+          await ctx.put(.loaded(result))
+          completedContinuation.yield()
+        }
+      })
+    await runtime.waitUntilIdle()
+    var startedIterator = started.makeAsyncIterator()
+    runtime.emit(.fetch(1))
+    #expect(await startedIterator.next() == 1)
+    runtime.emit(.fetch(2))
+    #expect(await startedIterator.next() == 2)
+    // 新しい結果が先に、古い結果が後に戻る。
+    gates.withLock { $0.removeValue(forKey: 2) }?.resume(returning: 102)
+    var completedIterator = completed.makeAsyncIterator()
+    await completedIterator.next()
+    gates.withLock { $0.removeValue(forKey: 1) }?.resume(returning: 101)
+    await runtime.waitUntilIdle()
+    #expect(host.dispatched == [.loaded(102)])
+    runtime.stop()
+  }
 }

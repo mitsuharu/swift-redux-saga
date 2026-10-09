@@ -797,7 +797,7 @@ extension ActionPattern where Value == Action, Action: Equatable {
 | `take` | `func take<V>(_ p: ActionPattern<Action, V>) async throws -> V` | 次に来た一致する Action を待つ |
 | `put` | `func put(_ action: Action) async` | reducer 適用後に戻る |
 | `select` | `func select<T: Sendable>(_ s: @Sendable (State) -> T) async -> T` / `func select() async -> State` | |
-| `call` | `func call<each A: Sendable, R: Sendable>(_ f: @Sendable (repeat each A) async throws -> R, _ args: repeat each A) async throws -> R` | 任意の async 関数を呼ぶ |
+| `call` | `func call<each A: Sendable, R: Sendable>(_ f: @Sendable (repeat each A) async throws -> R, _ args: repeat each A) async throws -> R` | 任意の async 関数を呼ぶ。呼ぶ前と戻った後にキャンセルを確認する（キャンセルに応じない関数の、キャンセル後の結果を返さない） |
 | `fork` | `func fork(_ saga: Saga) -> SagaTask` / `func fork(_ name: String?, _ body:) -> SagaTask` | attached。親のキャンセルが伝播し、子のエラーは親に伝播する |
 | `spawn` | `func spawn(_ saga: Saga) -> SagaTask` / `func spawn(_ name: String?, _ body:) -> SagaTask` | detached。ランタイム停止時のみキャンセルされる |
 | `cancel` | `ctx.cancel(_ task:)` / `SagaTask.cancel()` | 子をキャンセルしても親にエラーは伝わらない |
