@@ -23,6 +23,43 @@
     }
   }
 
+  private struct Item: Sendable, Equatable, Identifiable {
+    var id: Int
+    var title: String
+  }
+
+  private enum ListAction: Sendable, Equatable {
+    case rename(id: Int, title: String)
+    case remove(id: Int)
+  }
+
+  private let listReducer = Reducer<[Item], ListAction> { items, action in
+    switch action {
+    case .rename(let id, let title): items[id: id]?.title = title
+    case .remove(let id): items[id: id] = nil
+    }
+  }
+
+  @MainActor
+  @Suite struct OptionalBindingTests {
+    @Test func bindingToAnElementReadByIDReadsAndWrites() {
+      let store = Store(initialState: [Item(id: 1, title: "a")], reducer: listReducer)
+      let title = store.binding(\.[id: 1]?.title, default: "") { .rename(id: 1, title: $0) }
+      #expect(title.wrappedValue == "a")
+      title.wrappedValue = "b"
+      #expect(store.state == [Item(id: 1, title: "b")])
+    }
+
+    @Test func bindingToARemovedElementReturnsTheDefaultValue() {
+      let store = Store(
+        initialState: [Item(id: 1, title: "a"), Item(id: 2, title: "b")], reducer: listReducer)
+      let title = store.binding(\.[id: 2]?.title, default: "") { .rename(id: 2, title: $0) }
+      #expect(title.wrappedValue == "b")
+      store.dispatch(.remove(id: 2))
+      #expect(title.wrappedValue == "")
+    }
+  }
+
   @MainActor
   @Suite struct BindingTests {
     @Test func bindingReadsTheCurrentValue() {

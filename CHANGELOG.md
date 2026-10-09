@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### 追加
+
+- `Identifiable` の配列の要素を ID で読み書きする添字 `[id:]`（`Redux`）。添字のキーパス（`\.todos[index]`）で読んだ要素を削除すると停止するため、一覧の要素は ID で読む
+- Optional の値の `Binding` を作る `store.binding(_:default:send:)`（`ReduxSwiftUI`）
+
 ### ドキュメント
 
 - README に Saga のエラー処理の節を追加（ワーカーのエラーで、すべての Saga が止まることと、その避け方）
