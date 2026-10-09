@@ -24,11 +24,14 @@ final class ChannelCore<Value: Sendable>: Sendable {
     /// 待っている受け取り側。待ち始めた順。
     var takers: [(id: Int, continuation: CheckedContinuation<Value?, any Error>)] = []
     var isClosed = false
+    /// 閉じた理由のエラー。溜まっている値を受け取り終えた後の take で 1 回だけ投げる。
+    var failure: (any Error)?
     var onClose: (@Sendable () -> Void)?
   }
 
   private enum TakeOutcome {
     case value(Value?)
+    case failure(any Error)
     case waiting
     case cancelled
   }
@@ -86,13 +89,18 @@ final class ChannelCore<Value: Sendable>: Sendable {
       try await withCheckedThrowingContinuation { continuation in
         let outcome = storage.withLock { storage -> TakeOutcome in
           if !storage.buffer.isEmpty { return .value(storage.buffer.removeFirst()) }
-          if storage.isClosed { return .value(nil) }
+          if storage.isClosed {
+            guard let failure = storage.failure else { return .value(nil) }
+            storage.failure = nil
+            return .failure(failure)
+          }
           guard !Task.isCancelled else { return .cancelled }
           storage.takers.append((id, continuation))
           return .waiting
         }
         switch outcome {
         case .value(let value): continuation.resume(returning: value)
+        case .failure(let error): continuation.resume(throwing: error)
         case .waiting: activity.end()
         case .cancelled: continuation.resume(throwing: CancellationError())
         }
@@ -111,19 +119,38 @@ final class ChannelCore<Value: Sendable>: Sendable {
   }
 
   /// チャネルを閉じる。溜まっている値は受け取れる。待っている受け取り側には `nil` を渡す。
-  func close() {
-    let (takers, onClose) = storage.withLock {
-      storage -> ([CheckedContinuation<Value?, any Error>], (@Sendable () -> Void)?) in
-      guard !storage.isClosed else { return ([], nil) }
+  ///
+  /// `error` を渡すと、溜まっている値を受け取り終えた後の受け取り側に、そのエラーを 1 回だけ投げる
+  /// （待っている受け取り側がいれば、そのうちの 1 つに投げる）。
+  func close(throwing error: (any Error)? = nil) {
+    let (takers, failed, onClose) = storage.withLock {
+      storage -> (
+        [CheckedContinuation<Value?, any Error>], CheckedContinuation<Value?, any Error>?,
+        (@Sendable () -> Void)?
+      ) in
+      guard !storage.isClosed else { return ([], nil, nil) }
       storage.isClosed = true
+      var takers = storage.takers.map(\.continuation)
+      var failed: CheckedContinuation<Value?, any Error>?
+      if let error {
+        if takers.isEmpty {
+          storage.failure = error
+        } else {
+          failed = takers.removeFirst()
+        }
+      }
       // 受け取り側が待っているのはバッファが空のときだけなので、待っている全員に nil を渡してよい。
       defer {
         storage.takers = []
         storage.onClose = nil
       }
-      return (storage.takers.map(\.continuation), storage.onClose)
+      return (takers, failed, storage.onClose)
     }
     onClose?()
+    if let failed, let error {
+      activity.begin()
+      failed.resume(throwing: error)
+    }
     for taker in takers {
       activity.begin()
       taker.resume(returning: nil)

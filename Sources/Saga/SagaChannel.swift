@@ -23,8 +23,10 @@ public struct SagaChannel<Value: Sendable>: Sendable, AsyncSequence {
   }
 
   /// チャネルを閉じます。溜まっている値は引き続き受け取れます。
-  public func close() {
-    core.close()
+  ///
+  /// `error` を渡すと、溜まっている値を受け取り終えた後の ``take()`` がそのエラーを 1 回投げます。
+  public func close(throwing error: (any Error)? = nil) {
+    core.close(throwing: error)
   }
 
   public func makeAsyncIterator() -> Iterator {
@@ -61,7 +63,9 @@ extension SagaContext {
 
   /// 外部のイベント源から値を受け取るチャネルを作ります（redux-saga の `eventChannel`）。
   ///
-  /// `subscribe` には、値をチャネルに入れる関数 `emit` と、イベント源の終わりを伝える関数 `finish` が渡されます。
+  /// `subscribe` には、値をチャネルに入れる関数 `emit` と、イベント源の終わりを伝える `finish` が渡されます。
+  /// 障害で終わった場合は `finish(throwing: error)` を呼ぶと、受け取り側（`take` / `for try await`）が
+  /// 溜まっている値を受け取り終えた後にそのエラーを投げます（正常終了と区別して、再接続などを書けます）。
   /// `subscribe` は購読を解除する関数を返してください。チャネルが閉じられたときに呼びます。
   /// 作った Saga が終わると、チャネルは閉じます。
   ///
@@ -75,11 +79,12 @@ extension SagaContext {
     buffer: ChannelBuffer = .unbounded,
     _ subscribe: (
       _ emit: @escaping @Sendable (Value) -> Void,
-      _ finish: @escaping @Sendable () -> Void
+      _ finish: EventChannelFinish
     ) -> @Sendable () -> Void
   ) -> SagaChannel<Value> {
     let channel = ChannelCore<Value>(buffer: buffer, activity: runtime.activity)
-    let unsubscribe = subscribe({ channel.put($0) }, { channel.close() })
+    let unsubscribe = subscribe(
+      { channel.put($0) }, EventChannelFinish { channel.close(throwing: $0) })
     channel.onClose(unsubscribe)
     closeWhenFinished(channel)
     return SagaChannel(core: channel)
@@ -87,7 +92,9 @@ extension SagaContext {
 
   /// AsyncSequence から値を受け取るチャネルを作ります。
   ///
-  /// シーケンスが終わるとチャネルを閉じます。チャネルが閉じられると、シーケンスの読み取りをやめます。
+  /// シーケンスが終わるとチャネルを閉じます。シーケンスがエラーで終わった場合は、受け取り側
+  /// （`take` / `for try await`）が溜まっている値を受け取り終えた後にそのエラーを投げます。
+  /// チャネルが閉じられると、シーケンスの読み取りをやめます。
   /// シーケンスの読み取りは、チャネルが持つタスクで行います（Saga ではないため、`SagaTester` の `settle()` の対象外です）。
   public func eventChannel<Events: AsyncSequence & Sendable>(
     buffer: ChannelBuffer = .unbounded,
@@ -101,8 +108,12 @@ extension SagaContext {
           for try await event in events {
             emit(event)
           }
-        } catch {}
-        finish()
+          finish()
+        } catch is CancellationError {
+          // チャネルが閉じられて読み取りをやめた場合。すでに閉じているので何もしない。
+        } catch {
+          finish(throwing: error)
+        }
       }
       return { task.cancel() }
     }
@@ -112,5 +123,21 @@ extension SagaContext {
     if task.addObserver({ channel.close() }) == nil {
       channel.close()
     }
+  }
+}
+
+/// ``SagaContext/eventChannel(buffer:_:)`` のイベント源が、終わりをチャネルに伝える関数。
+public struct EventChannelFinish: Sendable {
+  private let close: @Sendable ((any Error)?) -> Void
+
+  init(_ close: @escaping @Sendable ((any Error)?) -> Void) {
+    self.close = close
+  }
+
+  /// イベント源の終わりを伝えます。障害で終わった場合はエラーを渡します。
+  ///
+  /// - Parameter error: 終わった理由のエラー。正常終了なら `nil`。
+  public func callAsFunction(throwing error: (any Error)? = nil) {
+    close(error)
   }
 }

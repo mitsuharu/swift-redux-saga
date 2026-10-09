@@ -798,7 +798,7 @@ extension ActionPattern where Value == Action, Action: Equatable {
 | `take` | `func take<V>(_ p: ActionPattern<Action, V>) async throws -> V` | 次に来た一致する Action を待つ |
 | `put` | `func put(_ action: Action) async` | reducer 適用後に戻る |
 | `select` | `func select<T: Sendable>(_ s: @Sendable (State) -> T) async -> T` / `func select() async -> State` | |
-| `call` | `func call<each A: Sendable, R: Sendable>(_ f: @Sendable (repeat each A) async throws -> R, _ args: repeat each A) async throws -> R` | 任意の async 関数を呼ぶ。呼ぶ前と戻った後にキャンセルを確認する（キャンセルに応じない関数の、キャンセル後の結果を返さない） |
+| `call` | `func call<each A: Sendable, R: Sendable>(_ f: @Sendable (repeat each A) async throws -> R, _ args: repeat each A) async throws -> R` | 任意の async 関数を呼ぶ。呼ぶ前と戻った後にキャンセルを確認する（キャンセル後の結果もエラーも返さず、`CancellationError` を投げる） |
 | `fork` | `func fork(_ saga: Saga) -> SagaTask` / `func fork(_ name: String?, _ body:) -> SagaTask` | attached。親のキャンセルが伝播し、子のエラーは親に伝播する |
 | `spawn` | `func spawn(_ saga: Saga) -> SagaTask` / `func spawn(_ name: String?, _ body:) -> SagaTask` | detached。ランタイム停止時のみキャンセルされる |
 | `cancel` | `ctx.cancel(_ task:)` / `SagaTask.cancel()` | 子をキャンセルしても親にエラーは伝わらない |
@@ -813,7 +813,7 @@ extension ActionPattern where Value == Action, Action: Equatable {
 | `all` | `func all<each R>(_ ops: repeat @Sendable (SagaContext) async throws -> each R) async throws -> (repeat each R)` | 各処理は fork した子で、自分の ctx を受け取る。1 つでも失敗したら他をキャンセルし、エラーは呼び出し元で catch できる（処理の中で fork した子の失敗も含む） |
 | `race` | `func race<each R>(_ ops: repeat @Sendable (SagaContext) async throws -> each R) async throws -> (repeat (each R)?)` | 最初に終わったもの以外はキャンセル。戻り値は勝者のみ非 nil。勝者が失敗したらそのエラー、キャンセルで終わったら `CancellationError` を投げる |
 | `actionChannel` | `func actionChannel<V>(_ p, buffer: ChannelBuffer = .unbounded) -> SagaChannel<V>` | 作った時点から溜める。作った Saga が終わると閉じる |
-| `eventChannel` | `func eventChannel<V>(buffer:, _ subscribe: (emit, finish) -> unsubscribe) -> SagaChannel<V>` / `func eventChannel(buffer:, from: some AsyncSequence)` | 閉じると unsubscribe を呼ぶ。作った Saga が終わると閉じる |
+| `eventChannel` | `func eventChannel<V>(buffer:, _ subscribe: (emit, EventChannelFinish) -> unsubscribe) -> SagaChannel<V>` / `func eventChannel(buffer:, from: some AsyncSequence)` | 閉じると unsubscribe を呼ぶ。作った Saga が終わると閉じる。イベント源がエラーで終わる（`finish(throwing:)`、シーケンスのエラー）と、溜まった値の後に受け取り側でそのエラーを投げる |
 
 ```swift
 public enum ChannelBuffer: Sendable { case unbounded, newest(Int), oldest(Int) }
