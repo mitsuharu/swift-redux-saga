@@ -224,6 +224,33 @@ private final class GatedStorage: PersistenceStorage {
   }
 }
 
+extension PersistenceSaveOrderTests {
+  @Test func aChangeDuringAFlushIsWrittenAfterTheFlushedWrite() async throws {
+    let storage = GatedStorage()
+    let middleware = PersistenceMiddleware<AppState, Action>(
+      Persistence(key: "settings", storage: storage, keyPath: \.settings),
+      clock: TestClock())
+    let store = Store(initialState: AppState(), reducer: reducer, middleware: [middleware])
+
+    store.dispatch(.setTheme("dark"))
+    let firstFlush = Task { await middleware.flush() }
+    // flush した古い State の書き込みが始まり、止まっている。
+    while storage.startedSaves == 0 { await Task.yield() }
+
+    store.dispatch(.setTheme("blue"))
+    let secondFlush = Task { await middleware.flush() }
+    storage.release()
+    await firstFlush.value
+    await secondFlush.value
+
+    #expect(storage.completedSaves == storage.startedSaves)
+    let restored = Persistence<AppState, Settings>(
+      key: "settings", storage: storage, keyPath: \.settings
+    ).restore(into: AppState())
+    #expect(restored.settings.theme == "blue")
+  }
+}
+
 @MainActor
 @Suite struct PersistenceMemoryTests {
   @Test func storeWithAPendingSaveIsReleased() async {
