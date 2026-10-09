@@ -88,7 +88,7 @@ private func makeTester(_ saga: Saga<Int, Action>) -> SagaTester<Int, Action> {
   }
 
   @Test func eventChannelDeliversEmittedValuesAndEndsWhenTheSourceFinishes() async throws {
-    let source = Locked<(emit: (@Sendable (String) -> Void)?, finish: (@Sendable () -> Void)?)>(
+    let source = Locked<(emit: (@Sendable (String) -> Void)?, finish: EventChannelFinish?)>(
       (nil, nil))
     let unsubscribed = Locked(false)
     let tester = makeTester(
@@ -151,6 +151,57 @@ private func makeTester(_ saga: Saga<Int, Action>) -> SagaTester<Int, Action> {
     }
     try tester.receive(.event("x"))
     try tester.receive(.closed)
+    try await tester.finish()
+  }
+}
+
+private struct Disconnected: Error {}
+
+@Suite struct EventChannelErrorTests {
+  @Test func anAsyncSequenceThatEndsWithAnErrorThrowsItAfterTheBufferedValues() async throws {
+    let (stream, continuation) = AsyncThrowingStream.makeStream(of: String.self)
+    let tester = makeTester(
+      Saga { ctx in
+        do {
+          for try await event in ctx.eventChannel(from: stream) {
+            await ctx.put(.event(event))
+          }
+          await ctx.put(.closed)
+        } catch is Disconnected {
+          await ctx.put(.event("disconnected"))
+        }
+      })
+    continuation.yield("x")
+    continuation.finish(throwing: Disconnected())
+    // シーケンスの読み取りは Saga ではないので settle の対象外。届くまで待つ。
+    while tester.unreceivedActions.count < 2 {
+      await tester.settle()
+      await Task.yield()
+    }
+    try tester.receive(.event("x"))
+    try tester.receive(.event("disconnected"))
+    try await tester.finish()
+  }
+
+  @Test func finishingWithAnErrorThrowsItToTheWaitingTaker() async throws {
+    let finish = Locked<EventChannelFinish?>(nil)
+    let tester = makeTester(
+      Saga { ctx in
+        let events = ctx.eventChannel { (_: @escaping @Sendable (String) -> Void, end) in
+          finish.withLock { $0 = end }
+          return {}
+        }
+        do {
+          for try await _ in events {}
+          await ctx.put(.closed)
+        } catch is Disconnected {
+          await ctx.put(.event("disconnected"))
+        }
+      })
+    await tester.settle()
+    finish.withLock { $0 }?(throwing: Disconnected())
+    await tester.settle()
+    try tester.receive(.event("disconnected"))
     try await tester.finish()
   }
 }
