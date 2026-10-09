@@ -57,6 +57,14 @@ public enum TodoFeature {
     case updated(Todo)
     case deleted(Todo.ID)
     case failed(String)
+
+    /// 保存を伴う編集か（Saga が届いた順に 1 件ずつ処理する）。
+    var isEdit: Bool {
+      switch self {
+      case .add, .toggleTapped, .deleteTapped: true
+      default: false
+      }
+    }
   }
 
   public static let initialState = State()
@@ -118,30 +126,47 @@ public struct TodoSagas: Sendable {
       ctx.takeLatest(.action(.refresh)) { ctx, _ in
         await perform(ctx) { .loaded(try await ctx.call(useCase.load)) }
       }
-      // 二重送信を防ぐため、追加の処理中に届いた addTapped は無視する。
-      ctx.takeLeading(.case(\.add)) { ctx, title in
-        await perform(ctx) {
-          guard let todo = try await ctx.call(useCase.add, title) else { return nil }
-          return .added(todo)
+      // 追加・完了の切り替え・削除は、届いた順に 1 件ずつ保存する。
+      // - takeLeading にしないのは、保存中に追加した ToDo を捨ててしまうため（入力欄はもう空になっている）。
+      // - takeEvery にしないのは、同じ ToDo を続けて切り替えると、どちらも保存前の値を読んで反転し、
+      //   1 回分の変更になるため。1 件ずつなら、2 回目は 1 回目の保存後の値を読む。
+      let edits = ctx.actionChannel(.filter(\.isEdit))
+      ctx.fork("todo.edits") { ctx in
+        for try await edit in edits {
+          await save(ctx, edit)
         }
       }
       // 入力が止まってから検索語を反映する。
       ctx.debounce(.milliseconds(300), .binding(\.$query)) { ctx, query in
         await ctx.put(.queryApplied(query))
       }
-      ctx.takeEvery(.case(\.toggleTapped)) { ctx, id in
-        guard let todo = await ctx.select({ $0.todos.entities[id] }) else { return }
-        await perform(ctx) { .updated(try await ctx.call(useCase.toggle, todo)) }
-      }
-      ctx.takeEvery(.case(\.deleteTapped)) { ctx, id in
-        await perform(ctx) {
-          try await ctx.call(useCase.delete, id)
-          return .deleted(id)
-        }
-      }
 
       // 起動時の読み込みは、View の表示とは関係なく始めたいので、View から送らずにルート Saga で始める。
       await ctx.put(.refresh)
+    }
+  }
+
+  /// 編集を 1 件保存し、結果を put する。
+  private func save(
+    _ ctx: SagaContext<TodoFeature.State, TodoFeature.Action>, _ edit: TodoFeature.Action
+  ) async {
+    switch edit {
+    case .add(let title):
+      await perform(ctx) {
+        guard let todo = try await ctx.call(useCase.add, title) else { return nil }
+        return .added(todo)
+      }
+    case .toggleTapped(let id):
+      // 保存する直前の値を読む（先に削除されていれば何もしない）。
+      guard let todo = await ctx.select({ $0.todos.entities[id] }) else { return }
+      await perform(ctx) { .updated(try await ctx.call(useCase.toggle, todo)) }
+    case .deleteTapped(let id):
+      await perform(ctx) {
+        try await ctx.call(useCase.delete, id)
+        return .deleted(id)
+      }
+    default:
+      break
     }
   }
 
