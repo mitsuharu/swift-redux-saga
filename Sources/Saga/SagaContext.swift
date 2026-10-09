@@ -150,6 +150,12 @@ public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
       activity.end()
       try await clock.sleep(for: duration) { activity.begin() }
     } else {
+      // 実時間の時計は眠っている Saga を起こす側に手を入れられないため、起きた側で数え直す。
+      // 起きてから数え直すまでの間は止まっているとみなされるが、実時間で動くアプリの待ち合わせでは問題にならない。
+      // 眠っている間も実行中として数えると、delay を繰り返す Saga があるだけで waitUntilIdle() が戻らなくなる。
+      let activity = runtime.activity
+      activity.end()
+      defer { activity.begin() }
       try await runtime.clock.sleep(for: duration)
     }
   }
