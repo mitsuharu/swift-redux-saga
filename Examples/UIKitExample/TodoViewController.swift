@@ -15,8 +15,6 @@ final class TodoViewController: UIViewController {
   private let showsCompletedSwitch = UISwitch()
   private let activityIndicator = UIActivityIndicatorView(style: .medium)
   private var dataSource: DataSource?
-  /// 表示中の ToDo（セルの内容を作るため）。
-  private var todos: [Todo.ID: Todo] = [:]
 
   init(viewModel: TodoListViewModel) {
     self.viewModel = viewModel
@@ -94,7 +92,8 @@ final class TodoViewController: UIViewController {
     tableView.delegate = self
     dataSource = DataSource(tableView: tableView) { [weak self] tableView, indexPath, id in
       let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
-      guard let todo = self?.todos[id] else { return cell }
+      // セルの内容は、その都度 ViewModel（の先の Store）から読む。ViewController に ToDo の写しを持たない。
+      guard let todo = self?.viewModel.todo(id) else { return cell }
       var content = cell.defaultContentConfiguration()
       content.text = todo.title
       content.image = UIImage(systemName: todo.isDone ? "checkmark.circle.fill" : "circle")
@@ -163,7 +162,6 @@ final class TodoViewController: UIViewController {
   }
 
   private func apply(_ todos: [Todo]) {
-    self.todos = Dictionary(uniqueKeysWithValues: todos.map { ($0.id, $0) })
     var snapshot = NSDiffableDataSourceSnapshot<Int, Todo.ID>()
     snapshot.appendSections([0])
     snapshot.appendItems(todos.map(\.id))
