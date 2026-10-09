@@ -21,12 +21,13 @@ extension SagaContext {
     _ channel: ChannelCore<Value>,
     _ handle: @escaping @Sendable (SagaContext, Value) async throws -> Void
   ) -> SagaTask {
-    let task = fork(name) { ctx in
+    let loop = Saga<State, Action>(name) { ctx in
       defer { channel.close() }
       while let value = try await channel.take() {
         try await handle(ctx, value)
       }
     }
+    let task = fork(loop, waitsForFirstEffect: false)
     // 呼び出し元が終わった後に fork された場合、子は動かないのでここで閉じる。
     if !task.isRunning { channel.close() }
     return task

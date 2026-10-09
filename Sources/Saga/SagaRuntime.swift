@@ -26,9 +26,23 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
   private let rootTasks = Locked(RootTasks())
   private let nextID = Locked(0)
 
+  private let startup = Locked(Startup())
+
   private struct RootTasks {
     var tasks: Set<SagaTask> = []
     var isStopped = false
+  }
+
+  /// 起動中（最初の ``run(_:)`` から、その間に起動した Saga がすべて最初の Effect に達するまで）の状態。
+  private struct Startup {
+    var hasStarted = false
+    var isBuffering = false
+    /// 起動中に emit された Action。
+    var actions: [Action] = []
+    /// 起動中に起動し、まだ最初の Effect に達していない Saga。
+    var pending: Set<SagaID> = []
+    /// 溜めた Action を届けている途中か（届けるのは 1 か所ずつにして、順序を保つ）。
+    var isDelivering = false
   }
 
   /// ランタイムを作ります。
@@ -50,6 +64,8 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
     self.monitor = monitor
     self.onError = onError
     self.multicaster = ActionMulticaster(activity: activity)
+    // ランタイムは Activity を所有しているため、弱参照にして循環させない。
+    activity.onIdle { [weak self] in self?.deliverStartupActions() }
   }
 
   /// 未処理のエラーをログに出力します（`onError` の既定値）。
@@ -74,17 +90,81 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
   /// Host が処理した Action を Saga に届けます。
   ///
   /// その時点で `take` などで待っている Saga だけが受け取ります。
+  ///
+  /// ただし、最初の ``run(_:)`` から Saga がはじめて Effect（`take` など）で止まるまでの間に emit した Action は、
+  /// 溜めておき、止まった時点で順に届けます。Saga は非同期に動き出すため、起動直後（View の表示時など）の
+  /// Action を取りこぼさないようにするためです。
   public func emit(_ action: Action) {
-    multicaster.emit(action)
+    let isBuffered = startup.withLock { startup -> Bool in
+      guard startup.isBuffering else { return false }
+      startup.actions.append(action)
+      return true
+    }
+    if !isBuffered {
+      multicaster.emit(action)
+    }
+  }
+
+  /// Saga が、待つ Effect（`take` / `put` / `call` など）か終わりに達したことを記録する。
+  ///
+  /// 起動中に起動した Saga がすべて達したら、溜めた Action を届ける。redux-saga の `run` が、
+  /// ルート Saga を最初の Effect まで同期に進めてから戻るのに合わせるため。
+  func sagaDidReachEffect(_ id: SagaID) {
+    let isReady = startup.withLock { startup -> Bool in
+      guard startup.isBuffering, startup.pending.remove(id) != nil else { return false }
+      return startup.pending.isEmpty
+    }
+    if isReady { deliverStartupActions() }
+  }
+
+  /// 起動中に溜めた Action を届け、溜めるのをやめる。
+  ///
+  /// 起動中の Saga がすべて最初の Effect に達したときのほか、すべての Saga が止まったときにも呼ぶ
+  /// （チャネルの読み取りのように、Effect を通らずに待つ Saga があっても溜め続けないため）。
+  private func deliverStartupActions() {
+    let canDeliver = startup.withLock { startup -> Bool in
+      guard startup.isBuffering, !startup.isDelivering else { return false }
+      startup.isDelivering = true
+      return true
+    }
+    guard canDeliver else { return }
+    while true {
+      // 届け終わるまで溜め続けるのは、届けている間に emit された Action が、溜めた Action より先に届かないようにするため。
+      let actions = startup.withLock { startup -> [Action] in
+        if startup.actions.isEmpty {
+          startup.isBuffering = false
+          startup.isDelivering = false
+          startup.pending = []
+        }
+        defer { startup.actions = [] }
+        return startup.actions
+      }
+      guard !actions.isEmpty else { return }
+      for action in actions {
+        multicaster.emit(action)
+      }
+    }
   }
 
   /// Saga を起動します。
   ///
   /// 起動した Saga は、呼び出し元のタスクとは独立して動きます。``stop()`` でまとめて止められます。
   /// 未処理のエラーで終わった場合は `onError` に渡されます。
+  ///
+  /// 最初の呼び出しから Saga がはじめて Effect で止まるまでに ``emit(_:)`` した Action は、止まった時点で届けます。
   @discardableResult
   public func run(_ saga: Saga<State, Action>) -> SagaTask {
-    let state = makeTaskState()
+    startup.withLock { startup in
+      guard !startup.hasStarted else { return }
+      startup.hasStarted = true
+      startup.isBuffering = true
+    }
+    return start(saga)
+  }
+
+  /// Saga を根として起動する（`run` と `spawn`）。
+  func start(_ saga: Saga<State, Action>) -> SagaTask {
+    let state = makeTaskState(waitsForFirstEffect: true)
     let task = SagaTask(state: state)
     let isStopped = rootTasks.withLock { rootTasks -> Bool in
       if !rootTasks.isStopped { rootTasks.tasks.insert(task) }
@@ -109,9 +189,7 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
 
   /// すべての Saga が Effect（`take` / `join` / `delay` など）で止まるまで待ちます。
   ///
-  /// Saga は ``run(_:)`` から非同期に動き出すため、起動直後に emit した Action は、まだ `take` で
-  /// 待ち始めていない Saga には届きません。起動直後の Action を確実に届けたい場合は、先にこのメソッドで待つか、
-  /// その処理を Saga の中に書いてください。
+  /// テストで、Saga の処理が終わったことを確かめてから State を確認する場合などに使います。
   ///
   /// `call` で呼んだ関数が終わらない場合は、このメソッドも戻りません。
   public func waitUntilIdle() async {
@@ -130,15 +208,23 @@ public final class SagaRuntime<State: Sendable, Action: Sendable>: Sendable {
     }
   }
 
-  func makeTaskState() -> SagaTaskState {
-    let id = nextID.withLock { id in
-      defer { id += 1 }
-      return id
+  /// - Parameter waitsForFirstEffect: 起動中なら、この Saga が最初の Effect に達するまで Action を溜めるか。
+  func makeTaskState(waitsForFirstEffect: Bool) -> SagaTaskState {
+    let id = SagaID(
+      rawValue: nextID.withLock { id in
+        defer { id += 1 }
+        return id
+      })
+    if waitsForFirstEffect {
+      startup.withLock { startup in
+        if startup.isBuffering { startup.pending.insert(id) }
+      }
     }
-    return SagaTaskState(id: SagaID(rawValue: id), activity: activity)
+    return SagaTaskState(id: id, activity: activity)
   }
 
   func finish(_ state: SagaTaskState, _ result: SagaResult) {
+    sagaDidReachEffect(state.id)
     // join で待っている側より先にモニタに通知する。join から戻った時点で通知が終わっているようにするため。
     state.finish(result) {
       monitor?.sagaFinished(state.id, result: result)

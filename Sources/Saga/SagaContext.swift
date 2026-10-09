@@ -14,6 +14,16 @@ public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
 
   private func trigger(_ effect: SagaEffect) {
     runtime.monitor?.effectTriggered(task.id, effect: effect)
+    switch effect {
+    case .put, .select, .call, .join, .delay:
+      runtime.sagaDidReachEffect(task.id)
+    case .take:
+      // take は待ち始めた（登録した）後に記録する。先に記録すると、溜めた Action が登録より先に届いて取りこぼすため。
+      break
+    case .fork, .spawn, .cancel:
+      // 待たずに続きを実行する Effect では、まだ購読を始めていない Action があり得る。
+      break
+    }
   }
 
   /// 現在のタスクがキャンセルされているかどうか（redux-saga の `cancelled()` 相当）。
@@ -30,7 +40,9 @@ public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
   /// - Throws: 待っている間にキャンセルされた場合は `CancellationError`。
   public func take<Value>(_ pattern: ActionPattern<Action, Value>) async throws -> Value {
     trigger(.take)
-    return try await runtime.multicaster.take(pattern)
+    return try await runtime.multicaster.take(pattern) { [runtime, id] in
+      runtime.sagaDidReachEffect(id)
+    }
   }
 
   /// 次に届く Action を待ちます。
@@ -71,7 +83,13 @@ public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
   /// 子を ``SagaTask/cancel()`` でキャンセルしても、呼び出し元にエラーは伝わりません。
   @discardableResult
   public func fork(_ saga: Saga<State, Action>) -> SagaTask {
-    let state = runtime.makeTaskState()
+    fork(saga, waitsForFirstEffect: true)
+  }
+
+  /// - Parameter waitsForFirstEffect: 起動中なら、子が最初の Effect に達するまで Action を溜めるか。
+  ///   ヘルパー（`takeEvery` など）は呼び出した時点で購読を始めているので、子を待たない。
+  func fork(_ saga: Saga<State, Action>, waitsForFirstEffect: Bool) -> SagaTask {
+    let state = runtime.makeTaskState(waitsForFirstEffect: waitsForFirstEffect)
     let parent = task
     trigger(.fork(state.id))
     runtime.monitor?.sagaStarted(state.id, name: saga.name, parent: parent.id)
@@ -105,7 +123,7 @@ public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
   /// ランタイムの停止（``SagaRuntime/stop()``）ではキャンセルされます。
   @discardableResult
   public func spawn(_ saga: Saga<State, Action>) -> SagaTask {
-    let task = runtime.run(saga)
+    let task = runtime.start(saga)
     trigger(.spawn(task.id))
     return task
   }

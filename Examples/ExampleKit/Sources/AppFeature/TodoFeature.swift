@@ -140,9 +140,7 @@ public struct TodoSagas: Sendable {
         }
       }
 
-      // 起動時の読み込みは、View から送らずにルート Saga で始める。
-      // run の直後に外から dispatch すると、Saga が待ち始める前に届いて取りこぼすことがあるため
-      // （設計書 7 章「起動直後の Action」）。ヘルパーは呼び出した時点で購読を始めているので、ここで put すれば届く。
+      // 起動時の読み込みは、View の表示とは関係なく始めたいので、View から送らずにルート Saga で始める。
       await ctx.put(.refresh)
     }
   }

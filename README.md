@@ -217,8 +217,8 @@ func makeStore() -> Store<Counter.State, Counter.Action> {
 }
 ```
 
-> [!IMPORTANT]
-> redux-saga の `run` はルート Saga を最初の `take` まで同期に進めますが、Swift では async 関数を同期に進められないため、`run` の直後に dispatch した Action は、まだ待ち始めていない Saga に届かないことがあります。起動時の処理はルート Saga の中に書くか（推奨）、`await sagaMiddleware.waitUntilIdle()` で待ってから dispatch してください。
+> [!NOTE]
+> Saga は `run` から非同期に動き出しますが、`run` の直後（View の表示時など）に dispatch した Action も取りこぼしません。起動した Saga が最初の Effect に達するまで溜めておき、後から届けます（redux-saga の `run` がルート Saga を最初の Effect まで同期に進めるのと同じ結果になります）。
 
 #### ログ出力（LoggingMiddleware）
 

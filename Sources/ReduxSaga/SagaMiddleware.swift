@@ -41,6 +41,9 @@ public final class SagaMiddleware<State: Sendable, Action: Sendable>: Middleware
 
   /// Saga を起動します。Store を作った後に呼んでください。
   ///
+  /// Saga は非同期に動き出しますが、起動直後に dispatch した Action も取りこぼしません。最初の起動から
+  /// Saga がはじめて Effect（`take` など）で止まるまでの Action は溜めておき、止まった時点で順に届けます。
+  ///
   /// - Returns: 起動した Saga のハンドル。
   @discardableResult
   public func run(_ saga: Saga<State, Action>) -> SagaTask {
@@ -50,9 +53,7 @@ public final class SagaMiddleware<State: Sendable, Action: Sendable>: Middleware
 
   /// すべての Saga が Effect（`take` / `join` / `delay` など）で止まるまで待ちます。
   ///
-  /// Saga は ``run(_:)`` から非同期に動き出すため、起動直後に dispatch した Action は、まだ `take` で
-  /// 待ち始めていない Saga には届きません。起動直後の Action を確実に届けたい場合は、先にこのメソッドで待つか、
-  /// その処理（起動時の読み込みなど）をルート Saga の中に書いてください。
+  /// テストで、Saga の処理が終わったことを確かめてから State を確認する場合などに使います。
   ///
   /// `call` で呼んだ関数が終わらない場合は、このメソッドも戻りません。
   public func waitUntilIdle() async {
