@@ -1,8 +1,10 @@
-import AppFeature
 import Domain
 import Foundation
+import ReduxPersistence
 import ReduxTesting
 import Testing
+
+@testable import AppFeature
 
 /// 失敗を返すリポジトリ。
 private struct FailingRepository: TodoRepository {
@@ -126,5 +128,35 @@ private func makeStore(_ todos: [Todo] = [milk, bread]) -> TestStore<
     }
     try await store.send(.errorDismissed) { $0.errorMessage = nil }
     try await store.finish()
+  }
+}
+
+/// 保存に時間がかかる間に続けて操作した場合。
+@MainActor
+@Suite struct TodoConsecutiveEditTests {
+  /// 保存に時間がかかるリポジトリで Store を作り、起動時の読み込みが終わるまで待つ。
+  private func makeComponents(_ todos: [Todo]) async -> AppStore.Components {
+    let useCase = TodoUseCase(
+      repository: InMemoryTodoRepository(todos: todos, latency: .milliseconds(20)))
+    let components = AppStore.makeComponents(useCase: useCase, storage: InMemoryStorage())
+    await components.sagaMiddleware.waitUntilIdle()
+    return components
+  }
+
+  @Test func togglingTheSameTodoTwiceWhileSavingEndsWhereItStarted() async {
+    let components = await makeComponents([milk])
+    // 1 回目の保存が終わる前に 2 回目を押す。
+    components.store.dispatch(.toggleTapped(milk.id))
+    components.store.dispatch(.toggleTapped(milk.id))
+    await components.sagaMiddleware.waitUntilIdle()
+    #expect(components.store.todos.entities[milk.id]?.isDone == false)
+  }
+
+  @Test func addingWhileAnotherAddIsSavingKeepsBoth() async {
+    let components = await makeComponents([])
+    components.store.dispatch(.add(title: "eggs"))
+    components.store.dispatch(.add(title: "tea"))
+    await components.sagaMiddleware.waitUntilIdle()
+    #expect(TodoFeature.visibleTodos(components.store.state).map(\.title) == ["eggs", "tea"])
   }
 }

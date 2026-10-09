@@ -439,7 +439,7 @@ Examples/
 ```
 
 - ToDo の画面は MVVM を経由し（画面特有の状態は ViewModel、共有データと Saga が関わる処理は Store）、設定の画面は Store を直接使っています。
-- `@Slice` / `@ActionCases`、`@BindableState`、`takeLatest` / `takeLeading` / `debounce`、`LoggingMiddleware`、設定の永続化（`ReduxPersistence`）、`TestStore` によるテストを使っています。
+- `@Slice` / `@ActionCases`、`@BindableState`、`takeLatest` / `actionChannel` / `debounce`、`LoggingMiddleware`、設定の永続化（`ReduxPersistence`）、`TestStore` によるテストを使っています。
 
 `Examples/Examples.xcodeproj` を Xcode で開いて実行できます。
 
