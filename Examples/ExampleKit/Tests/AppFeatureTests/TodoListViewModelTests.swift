@@ -1,43 +1,44 @@
-import AppFeature
 import Domain
 import Foundation
 import Redux
 import ReduxPersistence
+import ReduxSaga
 import Testing
+
+@testable import AppFeature
 
 @MainActor
 @Suite struct TodoListViewModelTests {
-  private func makeViewModel(storage: InMemoryStorage = InMemoryStorage()) -> (
-    TodoListViewModel, Store<TodoFeature.State, TodoFeature.Action>
-  ) {
+  /// ViewModel を作り、起動時の読み込みが終わるまで待つ。
+  private func makeViewModel(storage: InMemoryStorage = InMemoryStorage()) async
+    -> (TodoListViewModel, SagaMiddleware<TodoFeature.State, TodoFeature.Action>)
+  {
     let useCase = TodoUseCase(repository: InMemoryTodoRepository(latency: .zero))
-    let store = AppStore.make(useCase: useCase, storage: storage)
-    return (TodoListViewModel(store: store), store)
+    let (store, sagaMiddleware) = AppStore.makeComponents(useCase: useCase, storage: storage)
+    // 起動時の読み込み（refresh → loaded）を待たずに操作すると、後から届いた loaded が
+    // 追加した ToDo を上書きするため、Saga が止まるまで待つ。
+    await sagaMiddleware.waitUntilIdle()
+    return (TodoListViewModel(store: store), sagaMiddleware)
   }
 
-  /// Store の値が条件を満たすまで待つ（Saga と保存はメインアクターの外で進むため）。
-  private func waitUntil(_ condition: @MainActor () -> Bool) async {
-    while !condition() { await Task.yield() }
-  }
-
-  @Test func typingADraftEnablesAdding() {
-    let (viewModel, _) = makeViewModel()
+  @Test func typingADraftEnablesAdding() async {
+    let (viewModel, _) = await makeViewModel()
     #expect(!viewModel.canAdd)
     viewModel.draft = "eggs"
     #expect(viewModel.canAdd)
   }
 
   @Test func addSendsTheDraftAndClearsIt() async {
-    let (viewModel, _) = makeViewModel()
-    await waitUntil { !viewModel.isLoading }
+    let (viewModel, sagaMiddleware) = await makeViewModel()
     viewModel.draft = "  eggs "
     viewModel.add()
     #expect(viewModel.draft == "")
-    await waitUntil { viewModel.todos.map(\.title) == ["eggs"] }
+    await sagaMiddleware.waitUntilIdle()
+    #expect(viewModel.todos.map(\.title) == ["eggs"])
   }
 
-  @Test func blankDraftCannotBeAdded() {
-    let (viewModel, _) = makeViewModel()
+  @Test func blankDraftCannotBeAdded() async {
+    let (viewModel, _) = await makeViewModel()
     viewModel.draft = "   "
     #expect(!viewModel.canAdd)
     viewModel.add()
@@ -46,12 +47,17 @@ import Testing
 
   @Test func showsCompletedIsPersistedAndRestored() async throws {
     let storage = InMemoryStorage()
-    let (viewModel, _) = makeViewModel(storage: storage)
+    let (viewModel, _) = await makeViewModel(storage: storage)
     viewModel.showsCompleted = false
     #expect(!viewModel.showsCompleted)
-    await waitUntil { !storage.values.isEmpty }
+    // 保存はメインアクター外で debounce の後に行われる。上限を決めて待ち、待ちすぎたら失敗にする。
+    let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+    while storage.values.isEmpty, ContinuousClock.now < deadline {
+      try await Task.sleep(for: .milliseconds(50))
+    }
+    #expect(!storage.values.isEmpty)
 
-    let (restored, _) = makeViewModel(storage: storage)
+    let (restored, _) = await makeViewModel(storage: storage)
     #expect(!restored.showsCompleted)
   }
 }
