@@ -57,6 +57,12 @@
    - テストの十分さ（キャンセル、エラー、競合するタイミングのケース）
 3. CI がすべて成功していることを確認してからマージする。squash ではなく、コミット単位の履歴が残るマージ方法（merge commit）を使う。
 
+## リリース
+
+- バージョンは Semantic Versioning。1.0.0 までは、マイナーバージョンでも公開 API が変わり得る。
+- 公開 API や振る舞いを変えた PR は、`CHANGELOG.md` の `Unreleased` に追記する。
+- リリースは PR で `CHANGELOG.md` と README のインストール手順を更新し、マージ後にタグ（`0.1.0` の形式、`v` を付けない）と GitHub Release を作る。タグと GitHub Release は公開されて取り消しにくいので、作る前に作者（@mitsuharu）に確認する。
+
 ## 完了の定義（各 PR 共通）
 
 - Swift 6 言語モードで警告・エラーなし
