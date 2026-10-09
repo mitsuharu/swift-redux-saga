@@ -111,6 +111,42 @@ private let reducer = Reducer<AppState, Action> { state, action in
     #expect(received.value == [0])
   }
 
+  @Test func cancellingReleasesWhatTheHandlerCaptured() {
+    let store = Store(initialState: AppState(), reducer: reducer)
+    weak var weakCaptured: Captured?
+    var token: ObservationToken?
+    do {
+      let captured = Captured()
+      weakCaptured = captured
+      token = store.observe {
+        $0.count
+      } onChange: { _ in
+        _ = captured
+      }
+    }
+    token?.cancel()
+    #expect(weakCaptured == nil)
+    withExtendedLifetime(token) {}
+  }
+
+  @Test func releasingTheTokenReleasesWhatTheHandlerCaptured() {
+    let store = Store(initialState: AppState(), reducer: reducer)
+    weak var weakCaptured: Captured?
+    var token: ObservationToken?
+    do {
+      let captured = Captured()
+      weakCaptured = captured
+      token = store.observe {
+        $0.count
+      } onChange: { _ in
+        _ = captured
+      }
+    }
+    #expect(token != nil)
+    token = nil
+    #expect(weakCaptured == nil)
+  }
+
   @Test func observationDoesNotKeepTheStoreAlive() {
     var store: Store<AppState, Action>? = Store(initialState: AppState(), reducer: reducer)
     weak let weakStore = store
@@ -123,6 +159,8 @@ private let reducer = Reducer<AppState, Action> { state, action in
     token?.cancel()
   }
 }
+
+private final class Captured {}
 
 @MainActor
 @Observable
@@ -154,5 +192,20 @@ private final class CounterViewModel {
     viewModel.label = "total"
     #expect(await iterator.next() == "total: 1")
     token.cancel()
+  }
+
+  @Test func cancellingReleasesWhatTheReadAndHandlerCaptured() {
+    weak var weakViewModel: CounterViewModel?
+    let token: ObservationToken
+    do {
+      let viewModel = CounterViewModel(store: Store(initialState: AppState(), reducer: reducer))
+      weakViewModel = viewModel
+      token = ObservationToken.observe {
+        viewModel.text
+      } onChange: { _ in
+      }
+    }
+    token.cancel()
+    #expect(weakViewModel == nil)
   }
 }

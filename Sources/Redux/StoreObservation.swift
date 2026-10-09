@@ -5,13 +5,41 @@ import Observation
 /// ``cancel()`` を呼ぶか、トークンを解放すると購読を解除します。
 @MainActor
 public final class ObservationToken {
-  private(set) var isCancelled = false
+  // 値を読み直してハンドラを呼ぶ処理。購読の関数（read / onChange）を持つのはトークンだけにして、
+  // 解除したら手放す。Observation に登録するクロージャに持たせると、値が変わるまで残り、
+  // ハンドラが捕捉したオブジェクトを解放できないため。
+  private var update: (@MainActor (ObservationToken) -> Void)?
 
-  init() {}
+  init(update: @escaping @MainActor (ObservationToken) -> Void) {
+    self.update = update
+  }
 
-  /// 購読を解除します。以降、ハンドラは呼ばれません。
+  var isCancelled: Bool {
+    update == nil
+  }
+
+  /// 購読を解除します。以降、ハンドラは呼ばれず、ハンドラが捕捉したオブジェクトも手放します。
   public func cancel() {
-    isCancelled = true
+    update = nil
+  }
+
+  /// 値を読み直してハンドラを呼ぶ。解除されていれば何もしない。
+  func fire() {
+    update?(self)
+  }
+
+  /// `read` の中で読んだ値の変化を追跡し、値をハンドラに渡す。変化したら読み直す。
+  func track<Value>(
+    _ read: @MainActor () -> Value, onChange: @MainActor (Value) -> Void
+  ) {
+    let value = withObservationTracking(read) { [weak self] in
+      // onChange は変更の直前（willSet）に呼ばれ、この時点では新しい値を読めない。
+      // また、read の中で Store 以外の Observable を読んだ場合はメインアクター外から呼ばれ得るため、
+      // その場で処理せず、変更後にメインアクターで読み直す。
+      // トークンを弱参照にするのは、購読が呼び出し元やハンドラの捕捉したオブジェクトを延命しないため。
+      Task { @MainActor in self?.fire() }
+    }
+    onChange(value)
   }
 }
 
@@ -39,8 +67,15 @@ extension Store {
     _ read: @escaping @MainActor (Store) -> Value,
     onChange: @escaping @MainActor (Value) -> Void
   ) -> ObservationToken {
-    let token = ObservationToken()
-    Self.track(store: self, token: token, read: read, onChange: onChange)
+    // Store を弱参照で持つのは、購読が Store を延命しないようにするため。
+    let token = ObservationToken { [weak self] token in
+      guard let self else {
+        token.cancel()
+        return
+      }
+      token.track({ read(self) }, onChange: onChange)
+    }
+    token.fire()
     return token
   }
 
@@ -65,27 +100,6 @@ extension Store {
     }
     return stream
   }
-
-  // Store とトークンを弱参照で持つのは、購読が Store や呼び出し元を延命しないようにするため。
-  private static func track<Value>(
-    store: Store?,
-    token: ObservationToken?,
-    read: @escaping @MainActor (Store) -> Value,
-    onChange: @escaping @MainActor (Value) -> Void
-  ) {
-    guard let store, let token, !token.isCancelled else { return }
-    let value = withObservationTracking {
-      read(store)
-    } onChange: { [weak store, weak token] in
-      // onChange は変更の直前（willSet）に呼ばれ、この時点では新しい値を読めない。
-      // また、read の中で Store 以外の Observable を読んだ場合はメインアクター外から呼ばれ得るため、
-      // その場で処理せず、変更後にメインアクターで読み直す。
-      Task { @MainActor in
-        track(store: store, token: token, read: read, onChange: onChange)
-      }
-    }
-    onChange(value)
-  }
 }
 
 extension ObservationToken {
@@ -106,23 +120,10 @@ extension ObservationToken {
     _ read: @escaping @MainActor () -> Value,
     onChange: @escaping @MainActor (Value) -> Void
   ) -> ObservationToken {
-    let token = ObservationToken()
-    track(token: token, read: read, onChange: onChange)
-    return token
-  }
-
-  private static func track<Value>(
-    token: ObservationToken?,
-    read: @escaping @MainActor () -> Value,
-    onChange: @escaping @MainActor (Value) -> Void
-  ) {
-    guard let token, !token.isCancelled else { return }
-    let value = withObservationTracking(read) { [weak token] in
-      // Store.observe と同じく、変更後にメインアクターで読み直す。
-      Task { @MainActor in
-        track(token: token, read: read, onChange: onChange)
-      }
+    let token = ObservationToken { token in
+      token.track(read, onChange: onChange)
     }
-    onChange(value)
+    token.fire()
+    return token
   }
 }
