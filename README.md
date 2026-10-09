@@ -188,6 +188,35 @@ ctx.cancel(session)
 
 `action:` には `@ActionCases` が生成する case のプロパティ（`\.todo`）を、`embed:` には case（`AppAction.todo`）を渡します。
 
+#### Saga の寿命（画面の表示・ログイン）
+
+`sagaMiddleware.run` で起動した Saga は、呼び出し元の Task とは独立して動き、`stop()` で止めると二度と動きません（`stop()` は Store を捨てるときのためのものです）。画面の表示中だけ、ログイン中だけ動かす Saga は、次のように起動と停止を対応させます。
+
+- **アプリの起動中ずっと**: Store を作った直後に `run` します。
+- **ログイン中だけ**: ルート Saga の中で `ctx.fork` で起動し、ログアウトで `ctx.cancel` します。止めると通信中の読み込みや保存もキャンセルされるので、ログアウト後に古い結果が届きません。再ログインで起動し直します（[Example の `RootSagas`](Examples/ExampleKit/Sources/AppFeature/RootFeature.swift)）。
+
+  ```swift
+  while true {
+    _ = try await ctx.take(.case(\.auth?.loggedIn))
+    let session = ctx.fork(todoSagas.root, state: \.todo, action: \.todo, embed: AppAction.todo)
+    _ = try await ctx.take(.case(\.auth?.loggedOut))
+    ctx.cancel(session)
+  }
+  ```
+
+- **画面の表示中だけ**: SwiftUI では `.task` の中で `run` し、`.task` のキャンセル（画面の破棄）で Saga をキャンセルします。`run` は呼び出し元の Task のキャンセルを受け取らないため、`withTaskCancellationHandler` でつなぎます。UIKit では `viewDidAppear` で `run` し、`viewDidDisappear` で返された `SagaTask` を `cancel()` します。
+
+  ```swift
+  .task {
+    let task = sagaMiddleware.run(searchSagas.root, state: \.search, action: \.search, embed: AppAction.search)
+    await withTaskCancellationHandler {
+      _ = try? await task.join()
+    } onCancel: {
+      task.cancel()
+    }
+  }
+  ```
+
 #### エラー処理
 
 ワーカーで処理しなかったエラーは、redux-saga と同じく fork 元に伝わります。`takeEvery` などのヘルパーはワーカーが失敗するとヘルパーごと終了し、エラーはルート Saga まで伝わって、**すべての Saga が止まります**。アプリは動き続けますが、以降の Action に Saga が反応しなくなります（エラーは `onError` に渡され、既定ではログに出ます）。
@@ -471,15 +500,16 @@ try await store.finish()
 
 ## サンプル
 
-[`Examples/`](Examples) に、ロックインを避ける推奨構成の ToDo アプリ（SwiftUI / UIKit）があります。
+[`Examples/`](Examples) に、ロックインを避ける推奨構成の ToDo アプリ（SwiftUI / UIKit）があります。ログイン（`AuthFeature`）と ToDo（`TodoFeature`）の 2 つの機能を、それぞれの State・Action・Saga のまま親（`RootFeature`）に接続しています。
 
 ```
 Examples/
-├── ExampleKit/       Domain（本ライブラリに依存しない）と AppFeature（State / Action / Saga / ViewModel）
+├── ExampleKit/       Domain（本ライブラリに依存しない）と AppFeature（Auth / Todo / Root の State・Action・Saga、ViewModel）
 ├── SwiftUIExample/   SwiftUI アプリ
 └── UIKitExample/     UIKit アプリ
 ```
 
+- ToDo の Saga はログイン中だけ動き、ログアウトで止まります（`RootSagas`）。
 - ToDo の画面は MVVM を経由し（画面特有の状態は ViewModel、共有データと Saga が関わる処理は Store）、設定の画面は Store を直接使っています。
 - `@Slice` / `@ActionCases`、`@BindableState`、`takeLatest` / `actionChannel` / `debounce`、`LoggingMiddleware`、設定の永続化（`ReduxPersistence`）、`TestStore` によるテストを使っています。
 
