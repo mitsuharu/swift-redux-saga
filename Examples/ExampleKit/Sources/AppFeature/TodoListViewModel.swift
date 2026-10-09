@@ -30,6 +30,11 @@ public final class TodoListViewModel {
     TodoFeature.visibleTodos(store.state)
   }
 
+  /// ID の ToDo。表示用の写しを持たず、必要なときに Store から読むために使う。
+  public func todo(_ id: Todo.ID) -> Todo? {
+    store.todos.entities[id]
+  }
+
   public var isLoading: Bool {
     store.isLoading
   }
