@@ -1064,14 +1064,15 @@ App          View と Store の組み立て（依存の注入）
 ```
 Examples/
 ├── ExampleKit/          ローカルパッケージ
-│   ├── Domain           Todo / TodoRepository / TodoUseCase（本ライブラリに依存しない）
-│   └── AppFeature       TodoFeature（Slice）/ TodoSagas / AppStore（組み立て・永続化）/ TodoListViewModel（MVVM）
-├── SwiftUIExample/      SwiftUI アプリ（ToDo: MVVM 経由、Settings: Store を直接使う）
+│   ├── Domain           Todo / User と Repository / UseCase（本ライブラリに依存しない）
+│   └── AppFeature       AuthFeature・TodoFeature（Slice と Saga）/ RootFeature（2 つを親に接続）/ AppStore（組み立て・永続化）/ TodoListViewModel（MVVM）
+├── SwiftUIExample/      SwiftUI アプリ（Login・Settings: Store を直接使う、ToDo: MVVM 経由）
 ├── UIKitExample/        UIKit アプリ（同上。iOS 17 から動くよう observe を使う）
 └── Examples.xcodeproj   両アプリ（default MainActor isolation を有効にしている）
 ```
 
 - 画面ごとに、Store を直接使う書き方（設定画面: 画面特有の状態がない）と、MVVM を経由する書き方（ToDo の画面）を並べて示す。
+- 機能（ログイン、ToDo）ごとに State・Action・Saga を分け、それぞれの型のまま親（`RootFeature`）に接続する（5.6 の `Reducer.slice`、6.9 の Saga の接続）。ToDo の Saga はログイン中だけ動かし、ログアウトでキャンセルする。
 - Single source of truth を保つ。データは Store にだけ置き、ViewModel は Store を読む計算プロパティと、Store に送る操作だけを持つ（写しを持たない）。ViewModel が持つのは、Store にない画面特有の状態だけにする。View / ViewController も表示用の写しを持たず、必要なときに ViewModel（の先の Store）から読む。
 - MVVM と併用する画面では、画面特有の状態（入力中の文字列など）は ViewModel（`@Observable`）に持たせ、複数の画面で使うデータと Saga が関わる処理、永続化する設定は Store に置く。ViewModel は Store を読む計算プロパティを公開し、Observation がそのまま連鎖する。View / ViewController は ViewModel だけを見る。UIKit では `ObservationToken.observe` で ViewModel を購読する。
 - Xcode プロジェクトはフォルダ同期（`PBXFileSystemSynchronizedRootGroup`）を使い、ソースの追加でプロジェクトファイルを編集しなくて済むようにする。

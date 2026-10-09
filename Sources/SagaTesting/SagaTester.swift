@@ -93,7 +93,7 @@ public final class SagaTester<State: Sendable, Action: Sendable>: Sendable {
   ///
   /// 応答を手動で返すスタブを `call` している間など、Saga が止まらない状態で次の Action を送りたい場合に使います
   /// （検索語の連続した変更、通信中のログアウト、結果の到着順の逆転など）。Saga が発行する Action は
-  /// ``receive(_:timeout:fileID:line:)`` で届くまで待って確かめます。
+  /// `receive(_:timeout:)` で届くまで待って確かめます。
   public func dispatch(_ action: Action) {
     host.apply(action)
     runtime.emit(action)
@@ -103,7 +103,11 @@ public final class SagaTester<State: Sendable, Action: Sendable>: Sendable {
   ///
   /// ``dispatch(_:)`` と組み合わせて、Saga が止まらない状態で使います。
   ///
-  /// - Parameter timeout: 待つ時間の上限（実時間）。過ぎても届かなければ失敗します。
+  /// - Parameters:
+  ///   - expected: 期待する Action。
+  ///   - timeout: 待つ時間の上限（実時間）。過ぎても届かなければ失敗します。
+  ///   - fileID: 失敗の報告に使うファイル。
+  ///   - line: 失敗の報告に使う行。
   /// - Throws: 時間内に Action が届かない、または等しくない場合は ``SagaTesterFailure``。
   public func receive(
     _ expected: Action, timeout: Duration, fileID: String = #fileID, line: Int = #line
@@ -114,7 +118,11 @@ public final class SagaTester<State: Sendable, Action: Sendable>: Sendable {
 
   /// Saga が次に発行する Action を、届くまで待って取り出し、パターンに一致すれば取り出した値を返します。
   ///
-  /// - Parameter timeout: 待つ時間の上限（実時間）。過ぎても届かなければ失敗します。
+  /// - Parameters:
+  ///   - pattern: 期待する Action のパターン。
+  ///   - timeout: 待つ時間の上限（実時間）。過ぎても届かなければ失敗します。
+  ///   - fileID: 失敗の報告に使うファイル。
+  ///   - line: 失敗の報告に使う行。
   /// - Throws: 時間内に Action が届かない、または一致しない場合は ``SagaTesterFailure``。
   @discardableResult
   public func receive<Value>(

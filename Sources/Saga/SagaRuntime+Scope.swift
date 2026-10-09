@@ -96,7 +96,7 @@ struct ScopedHost<ParentState: Sendable, ParentAction: Sendable, State: Sendable
 extension SagaContext {
   /// 子の State・Action で書いた Saga を、親の State・Action に接続して、子として起動します。
   ///
-  /// ``SagaRuntime/run(_:state:action:embed:)`` と同じく子の型のまま動かし、``fork(_:)`` と同じく
+  /// `SagaRuntime.run(_:state:action:embed:)` と同じく子の型のまま動かし、``fork(_:)`` と同じく
   /// 呼び出し元がキャンセルされると止まります。ログイン中だけ動かす Saga を、ログアウトで止める場合などに使います。
   /// 子の Saga の未処理のエラーは `onError` に渡し、呼び出し元には伝えません。
   ///

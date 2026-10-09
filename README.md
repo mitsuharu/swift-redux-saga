@@ -452,7 +452,29 @@ ViewModel には Store の値の写しを持たせず、計算プロパティで
 
 ### default MainActor isolation を有効にしたアプリ
 
-Action / State / reducer / Saga はメインアクター外からも使われるため、default MainActor isolation のモジュールでは `nonisolated` を付けて宣言してください（`nonisolated enum Counter: Slice`、`nonisolated let appReducer = ...` など）。推奨構成では、これらを置く `AppFeature` ターゲットは default isolation を使いません。
+Xcode 26 で作ったアプリのターゲットは、既定で default MainActor isolation が有効です。Action / State / reducer / Saga はメインアクター外（Saga やテスト）からも使われるため、このモジュールでは `nonisolated` を付けて宣言してください。State や Action の中で使うモデル（`User` など）や、Saga に注入するプロトコル（Repository）も同じです。
+
+```swift
+nonisolated struct User: Sendable, Equatable, Identifiable { ... }
+nonisolated protocol UserRepository: Sendable { ... }
+
+@Slice
+nonisolated enum UserFeature { ... }
+
+nonisolated struct UserSagas: Sendable { ... }
+
+nonisolated struct AppState: Sendable, Equatable { ... }
+@ActionCases
+nonisolated enum AppAction: Sendable, Equatable { ... }
+nonisolated let appReducer = Reducer<AppState, AppAction> { ... }
+```
+
+付け忘れると、次のようなエラーになります。
+
+- `type 'KeyPath<AppState, ...>' does not conform to the 'Sendable' protocol`（State が MainActor に隔離されている）
+- `main actor-isolated conformance of 'User' to 'Identifiable' cannot be used in nonisolated context`（モデルの準拠が MainActor に隔離されている）
+
+推奨構成では、これらを置く `AppFeature` ターゲットは default isolation を使わず、View を置くアプリのターゲットだけで有効にします（[サンプル](#サンプル)と同じ構成）。
 
 ## テスト
 

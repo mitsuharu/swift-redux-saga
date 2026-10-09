@@ -14,6 +14,9 @@ let store = Store(
   middleware: [PersistenceMiddleware<AppState, AppAction>(persistence)])
 ```
 
+保存は State が変わってから少し待ってまとめて行います。その間にアプリが終了すると保存されないので、
+バックグラウンドに入るときに ``PersistenceMiddleware/flush()`` を呼んでください。
+
 ## Topics
 
 - ``Persistence``
