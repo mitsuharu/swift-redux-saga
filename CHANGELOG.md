@@ -19,6 +19,7 @@
 
 ### 修正
 
+- `SagaTester` / `TestStore` の `advance(by:)` で、`delay` に入った直後の Saga がまれに起こされず、テストが不安定になることがあった（`delay` が時計に眠りを登録する前に、止まったとみなされていた）
 - `eventChannel(from:)`: シーケンスがエラーで終わっても、受け取り側では正常終了になっていた。溜まった値の後にそのエラーを投げる。購読関数版も `finish(throwing:)` でエラーを伝えられる（`finish` の型は `EventChannelFinish`。`finish()` の呼び方は変わらない）
 - `call`: キャンセルされた後に関数が `CancellationError` 以外のエラー（`URLError(.cancelled)` など）を投げると、そのまま投げていた。ワーカーの一般的な `catch` が古い失敗を Action にし、新しい結果を上書きし得た。キャンセル後は `CancellationError` を投げる
 - `EntityAdapter.updateOne` / `updateMany`: 更新で ID をすでにある ID に変えると、`ids` に同じ ID が 2 つ並んだ。すでにあるエンティティを置き換える（Redux Toolkit と同じ）

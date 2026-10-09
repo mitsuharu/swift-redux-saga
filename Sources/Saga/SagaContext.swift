@@ -170,8 +170,8 @@ public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
     trigger(.delay(duration))
     if let clock = runtime.clock as? any ActivityTrackingClock {
       let activity = runtime.activity
-      activity.end()
-      try await clock.sleep(for: duration) { activity.begin() }
+      try await clock.sleep(
+        for: duration, onSleep: { activity.end() }, onWake: { activity.begin() })
     } else {
       // 実時間の時計は眠っている Saga を起こす側に手を入れられないため、起きた側で数え直す。
       // 起きてから数え直すまでの間は止まっているとみなされるが、実時間で動くアプリの待ち合わせでは問題にならない。
