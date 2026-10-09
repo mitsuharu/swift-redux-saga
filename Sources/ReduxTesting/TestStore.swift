@@ -119,6 +119,70 @@ public final class TestStore<State: Sendable & Equatable, Action: Sendable> {
     await settle()
   }
 
+  /// Action を dispatch し、State の変化を確かめます。``send(_:assert:fileID:line:)`` と違い、Saga が止まるのを待ちません。
+  ///
+  /// 応答を手動で返すスタブを `call` している間など、Saga が止まらない状態で次の Action を送りたい場合に使います
+  /// （検索語の連続した変更、通信中のログアウト、結果の到着順の逆転など）。Saga が dispatch する Action は
+  /// ``receive(_:timeout:assert:fileID:line:)`` で届くまで待って確かめます。
+  ///
+  /// - Throws: State が期待と異なる場合は ``TestStoreFailure``。
+  public func dispatch(
+    _ action: Action,
+    assert: ((inout State) -> Void)? = nil,
+    fileID: String = #fileID,
+    line: Int = #line
+  ) throws {
+    let unreceived = recorder.records.count
+    store.dispatch(action)
+    let own = recorder.removeRecord(at: unreceived)
+    try check(own?.state ?? store.state, assert, after: "\(action)", fileID: fileID, line: line)
+  }
+
+  /// Saga やミドルウェアが次に dispatch する Action を、届くまで待って確かめます。
+  ///
+  /// ``dispatch(_:assert:fileID:line:)`` と組み合わせて、Saga が止まらない状態で使います。
+  ///
+  /// - Parameter timeout: 待つ時間の上限（実時間）。過ぎても届かなければ失敗します。
+  /// - Throws: 時間内に Action が届かない、等しくない、または State が期待と異なる場合は ``TestStoreFailure``。
+  public func receive(
+    _ expected: Action,
+    timeout: Duration,
+    assert: ((inout State) -> Void)? = nil,
+    fileID: String = #fileID,
+    line: Int = #line
+  ) async throws where Action: Equatable {
+    try await waitForRecord(timeout: timeout, fileID: fileID, line: line)
+    try receive(expected, assert: assert, fileID: fileID, line: line)
+  }
+
+  /// Saga やミドルウェアが次に dispatch する Action を、届くまで待ってパターンで確かめ、取り出した値を返します。
+  ///
+  /// - Parameter timeout: 待つ時間の上限（実時間）。過ぎても届かなければ失敗します。
+  @discardableResult
+  public func receive<Value>(
+    _ pattern: ActionPattern<Action, Value>,
+    timeout: Duration,
+    assert: ((inout State) -> Void)? = nil,
+    fileID: String = #fileID,
+    line: Int = #line
+  ) async throws -> Value {
+    try await waitForRecord(timeout: timeout, fileID: fileID, line: line)
+    return try receive(pattern, assert: assert, fileID: fileID, line: line)
+  }
+
+  private func waitForRecord(timeout: Duration, fileID: String, line: Int) async throws {
+    let deadline = ContinuousClock.now.advanced(by: timeout)
+    // 届いたときに起こす仕組みを持たず短い間隔で確かめるのは、記録はメインアクター上の dispatch で同期に行われ、
+    // 待っている間もメインアクターを手放していれば届くため。上限の判定にだけ実時間を使う。
+    while recorder.records.isEmpty {
+      guard ContinuousClock.now < deadline else {
+        throw TestStoreFailure(
+          "No action was dispatched within \(timeout).", fileID: fileID, line: line)
+      }
+      try await Task.sleep(for: .milliseconds(1))
+    }
+  }
+
   /// Saga やミドルウェアが次に dispatch した Action が、期待した Action と等しいかを確かめます。
   ///
   /// - Parameters:

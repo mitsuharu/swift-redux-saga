@@ -967,7 +967,7 @@ Swift にはジェネレーターがないため、redux-saga の「Effect を 1
 | `TestClock` | `SagaTesting` | 手動で進める `Clock`。`advance(by:)` / `advance(to:)` |
 | `SagaTester` | `SagaTesting` | Store なしで Saga を動かす。`send` / `receive` / `advance(by:)` / `settle` / `finish` |
 | `SagaTesterFailure` | `SagaTesting` | 検証の失敗。テスト支援は Swift Testing を import せず、失敗を `throws` で返す |
-| `TestStore` | `ReduxTesting` | 本物の `Store` + ミドルウェア（Saga を含む）を動かし、`send(_:assert:)` で reducer 直後の State を、`receive(_:assert:)` で Saga などが dispatch した Action とその後の State を順に検証する |
+| `TestStore` | `ReduxTesting` | 本物の `Store` + ミドルウェア（Saga を含む）を動かし、`send(_:assert:)` で reducer 直後の State を、`receive(_:assert:)` で Saga などが dispatch した Action とその後の State を順に検証する。通信が重なる場面は、待たずに送る `dispatch(_:assert:)` と、届くまで待つ `receive(_:timeout:assert:)` で検証する（`SagaTester` も同じ） |
 | `TestStoreFailure` | `ReduxTesting` | 検証の失敗 |
 
 ### フレーキーにしないための仕組み

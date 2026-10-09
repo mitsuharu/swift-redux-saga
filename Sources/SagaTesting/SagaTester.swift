@@ -89,6 +89,55 @@ public final class SagaTester<State: Sendable, Action: Sendable>: Sendable {
     await settle()
   }
 
+  /// 外から Action を送ります。``send(_:)`` と違い、Saga が止まるのを待ちません。
+  ///
+  /// 応答を手動で返すスタブを `call` している間など、Saga が止まらない状態で次の Action を送りたい場合に使います
+  /// （検索語の連続した変更、通信中のログアウト、結果の到着順の逆転など）。Saga が発行する Action は
+  /// ``receive(_:timeout:fileID:line:)`` で届くまで待って確かめます。
+  public func dispatch(_ action: Action) {
+    host.apply(action)
+    runtime.emit(action)
+  }
+
+  /// Saga が次に発行する Action を、届くまで待って取り出し、期待した Action と等しいかを確かめます。
+  ///
+  /// ``dispatch(_:)`` と組み合わせて、Saga が止まらない状態で使います。
+  ///
+  /// - Parameter timeout: 待つ時間の上限（実時間）。過ぎても届かなければ失敗します。
+  /// - Throws: 時間内に Action が届かない、または等しくない場合は ``SagaTesterFailure``。
+  public func receive(
+    _ expected: Action, timeout: Duration, fileID: String = #fileID, line: Int = #line
+  ) async throws where Action: Equatable {
+    try await waitForAction(timeout: timeout, fileID: fileID, line: line)
+    try receive(expected, fileID: fileID, line: line)
+  }
+
+  /// Saga が次に発行する Action を、届くまで待って取り出し、パターンに一致すれば取り出した値を返します。
+  ///
+  /// - Parameter timeout: 待つ時間の上限（実時間）。過ぎても届かなければ失敗します。
+  /// - Throws: 時間内に Action が届かない、または一致しない場合は ``SagaTesterFailure``。
+  @discardableResult
+  public func receive<Value>(
+    _ pattern: ActionPattern<Action, Value>, timeout: Duration,
+    fileID: String = #fileID, line: Int = #line
+  ) async throws -> Value {
+    try await waitForAction(timeout: timeout, fileID: fileID, line: line)
+    return try receive(pattern, fileID: fileID, line: line)
+  }
+
+  private func waitForAction(timeout: Duration, fileID: String, line: Int) async throws {
+    let deadline = ContinuousClock.now.advanced(by: timeout)
+    // 届いたときに起こす仕組みを持たず短い間隔で確かめるのは、Saga は別のタスクで動いて Host に記録するため、
+    // 待つ側は確かめるだけで足りるから。実時間は上限の判定にだけ使う。
+    while host.received.isEmpty {
+      guard ContinuousClock.now < deadline else {
+        throw SagaTesterFailure(
+          "No action was put by the saga within \(timeout).", fileID: fileID, line: line)
+      }
+      try await Task.sleep(for: .milliseconds(1))
+    }
+  }
+
   /// 時計を進めます。進めた範囲で起きる Saga を順に起こし、そのたびに Saga が止まるまで待ちます。
   ///
   /// 起きた Saga がさらに `delay` し、その起床時刻が進めた範囲に入っている場合も起こします。
