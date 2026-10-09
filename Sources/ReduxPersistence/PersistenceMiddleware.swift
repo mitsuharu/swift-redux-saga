@@ -15,6 +15,9 @@ public final class PersistenceMiddleware<State: Sendable, Action: Sendable>: Mid
   private let clock: any Clock<Duration>
   private let onError: @Sendable (any Error) -> Void
   private var pending: (task: Task<Void, Never>, isSuperseded: Locked<Bool>)?
+  // 最後に作った保存の Task。保存を待っているかどうか（pending）とは別に持つのは、flush() で pending を
+  // 外した後に作った保存も、書き込み中の保存の後に書くため。
+  private var lastSave: Task<Void, Never>?
 
   /// ミドルウェアを作ります。
   ///
@@ -55,10 +58,12 @@ public final class PersistenceMiddleware<State: Sendable, Action: Sendable>: Mid
 
   /// 保存を待っている State があれば、すぐに保存します。書き込み中の保存があれば、その終わりも待ちます。
   public func flush() async {
-    guard let pending else { return }
-    self.pending = nil
-    pending.task.cancel()
-    await pending.task.value
+    if let pending {
+      self.pending = nil
+      pending.task.cancel()
+    }
+    // 保存はそれぞれ前の保存の後に書くので、最後の保存を待てば、それまでの保存はすべて終わっている。
+    await lastSave?.value
   }
 
   private func schedule(_ state: State) {
@@ -68,7 +73,7 @@ public final class PersistenceMiddleware<State: Sendable, Action: Sendable>: Mid
       pending.task.cancel()
     }
     let isSuperseded = Locked(false)
-    let previous = pending?.task
+    let previous = lastSave
     let (save, clock, debounce, onError) = (save, clock, debounce, onError)
     // Task.detached にするのは、エンコードとファイルへの書き込みをメインアクターで行わないため。
     let task = Task.detached {
@@ -85,6 +90,7 @@ public final class PersistenceMiddleware<State: Sendable, Action: Sendable>: Mid
       }
     }
     pending = (task, isSuperseded)
+    lastSave = task
   }
 }
 
