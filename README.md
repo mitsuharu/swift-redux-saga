@@ -181,7 +181,7 @@ let todoStore = store.scope(state: \.todo, action: AppAction.todo)   // Store<To
 TodoListView(viewModel: TodoListViewModel(store: todoStore))
 ```
 
-Saga も同じく、子の Saga（`Saga<Todo.State, Todo.Action>`）を、子の型のまま親（`AppState` / `AppAction`）に接続できます。Reducer の `scope` と同じ考え方です。子の Saga の `select` は子の State を返し、`take` には子の Action が届き、`put` は親の Action に包んで発行します。
+Saga も同じく、子の Saga（`Saga<Todo.State, Todo.Action>`）を、子の型のまま親（`AppState` / `AppAction`）に接続できます。Reducer の `scope` と同じ考え方です。子の Saga の `select` は子の State を返し、`take` には子の Action が届き、`put` は親の Action に包んで発行します。型を付け替えるだけなので、fork / spawn / キャンセル / エラーの伝わり方は、モジュールに切り出す前と変わりません。
 
 ```swift
 // 起動時に接続する

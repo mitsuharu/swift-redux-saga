@@ -111,23 +111,85 @@ private let todoSaga = Saga<TodoState, TodoAction>("todo") { ctx in
     runtime.stop()
   }
 
-  @Test func aFailureOfAForkedChildIsReportedOnceAndDoesNotStopTheParent() async throws {
+  @Test func aFailureOfAForkedChildPropagatesToTheCallerLikeAnyFork() async throws {
     let failing = Saga<TodoState, TodoAction>("failing") { ctx in
       _ = try await ctx.take(add)
       throw TestError()
     }
     let tester = SagaTester(
       initialState: AppState(), reduce: reduce,
-      saga: Saga<AppState, AppAction> { ctx in
-        ctx.fork(failing, state: \.todo, action: \.todo, embed: AppAction.todo)
-        _ = try await ctx.take(.action(.logout))
-        await ctx.put(.login)
+      saga: Saga<AppState, AppAction>("app") { ctx in
+        do {
+          try await ctx.join(
+            ctx.fork(failing, state: \.todo, action: \.todo, embed: AppAction.todo))
+        } catch is TestError {
+          // 機能をモジュールに切り出しても、失敗は通常の fork と同じく呼び出し元で catch できる。
+          await ctx.put(.logout)
+        }
       })
     await tester.send(.todo(.add("x")))
-    #expect(tester.errors.count == 1)
-    await tester.send(.logout)
-    try tester.receive(.login)
-    #expect(tester.isRunning == false)
+    try tester.receive(.logout)
+    let errors = tester.errors
+    #expect(errors.count == 1)
+    #expect(errors.first?.sagaStack == ["failing", "app"])
     _ = try? await tester.finish()
+  }
+
+  @Test func sagasSpawnedFromAScopedSagaKeepReceivingActionsAndStopWithTheRuntime() async throws {
+    let host = TestHost<AppState, AppAction>(initialState: AppState(), reducer: reduce)
+    let runtime = host.makeRuntime()
+    let spawned = Locked<SagaTask?>(nil)
+    // 子の根は監視を spawn してすぐ終わる。
+    let root = runtime.run(
+      Saga<TodoState, TodoAction>("starter") { ctx in
+        let watcher = ctx.spawn("watcher") { ctx in
+          while true {
+            let title = try await ctx.take(add)
+            await ctx.put(.added(title))
+          }
+        }
+        spawned.withLock { $0 = watcher }
+      },
+      state: \.todo, action: \.todo, embed: AppAction.todo)
+    try await root.join()
+    runtime.emit(.todo(.add("milk")))
+    await runtime.waitUntilIdle()
+    #expect(host.dispatched == [.todo(.added("milk"))])
+
+    runtime.stop()
+    let watcher = try #require(spawned.withLock { $0 })
+    await #expect(throws: CancellationError.self) { try await watcher.join() }
+  }
+
+  @Test func joiningTheCallerWaitsForTheCleanupOfACancelledScopedChild() async throws {
+    let cleanedUp = Locked(false)
+    let tester = SagaTester(
+      initialState: AppState(), reduce: reduce,
+      saga: Saga<AppState, AppAction> { ctx in
+        let session = ctx.fork { ctx in
+          ctx.fork(
+            Saga<TodoState, TodoAction> { ctx in
+              do {
+                _ = try await ctx.take(add)
+              } catch is CancellationError {
+                // キャンセルの後に、時間のかかる後始末をする。
+                try? await Task.sleep(for: .zero)
+                await ctx.put(.added("cleanup"))
+                cleanedUp.withLock { $0 = true }
+                throw CancellationError()
+              }
+            },
+            state: \.todo, action: \.todo, embed: AppAction.todo)
+        }
+        _ = try await ctx.take(.action(.logout))
+        ctx.cancel(session)
+        _ = try? await ctx.join(session)
+        // 親の join から戻った時点で、配下の子の後始末も終わっている。
+        await ctx.put(cleanedUp.withLock { $0 } ? .login : .logout)
+      })
+    await tester.send(.logout)
+    #expect(tester.unreceivedActions == [.todo(.added("cleanup")), .login])
+    tester.skipReceivedActions()
+    try await tester.finish()
   }
 }

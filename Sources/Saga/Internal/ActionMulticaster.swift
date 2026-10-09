@@ -36,7 +36,7 @@ final class ActionMulticaster<Action: Sendable>: Sendable {
   /// `onWaiting` は登録した直後に呼ぶ。
   func take<Value>(
     _ pattern: ActionPattern<Action, Value>,
-    onWaiting: @Sendable () -> Void = {}
+    onWaiting: @Sendable () -> Void
   ) async throws -> Value {
     let id = makeID()
     return try await withTaskCancellationHandler {

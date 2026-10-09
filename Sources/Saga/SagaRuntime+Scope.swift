@@ -8,8 +8,8 @@ extension SagaRuntime {
   /// - 子の Saga の `take` には、親に届いた Action のうち `action` で取り出せたものが届きます。
   /// - 子の Saga の `put` は、`embed` で親の Action に包んで発行します。
   ///
-  /// 子の Saga はこのランタイムの ``stop()`` で止まり、``waitUntilIdle()`` の対象になります。未処理のエラーは
-  /// このランタイムの `onError` に渡します。
+  /// 子の Saga は、このランタイムの ``run(_:)`` で起動した Saga と同じに扱います。子が `spawn` した Saga も含めて
+  /// ``stop()`` で止まり、``waitUntilIdle()`` の対象になり、未処理のエラーは `onError` に渡します。
   ///
   /// ```swift
   /// runtime.run(todoSagas.root, state: \.todo, action: \.todo, embed: AppAction.todo)
@@ -28,27 +28,7 @@ extension SagaRuntime {
     action: @escaping @Sendable (Action) -> ChildAction?,
     embed: @escaping @Sendable (ChildAction) -> Action
   ) -> SagaTask {
-    let child = SagaRuntime<ChildState, ChildAction>(
-      host: ScopedHost(parent: host, state: state, embed: embed),
-      clock: clock, monitor: monitor, onError: onError, activity: activity, nextID: nextID)
-    let id = makeScopeID()
-    scopes.withLock {
-      $0[id] = ScopedRuntime(
-        emit: { parentAction in
-          if let childAction = action(parentAction) { child.emit(childAction) }
-        },
-        stop: { child.stop() })
-    }
-    // 子の Saga が終わったら、Action を届けるのをやめて、子のランタイムを手放す。
-    let task = child.run(saga)
-    if task.state.addObserver({ [scopes] in _ = scopes.withLock { $0.removeValue(forKey: id) } })
-      == nil
-    {
-      _ = scopes.withLock { $0.removeValue(forKey: id) }
-    }
-    // 接続する前に止められていた場合も、子を止める。
-    if isStopped { child.stop() }
-    return task
+    run(saga, in: rootEnvironment.scoped(state: state, action: action, embed: embed))
   }
 
   /// 子の Saga を、キーパスで親の State・Action に接続して起動します。
@@ -66,39 +46,12 @@ extension SagaRuntime {
   }
 }
 
-/// 子のランタイムから見た Host。親の Host を通して、子の State を読み、子の Action を親の Action にして発行する。
-struct ScopedHost<ParentState: Sendable, ParentAction: Sendable, State: Sendable, Action: Sendable>:
-  SagaHost
-{
-  let parent: any SagaHost<ParentState, ParentAction>
-  let toChildState: @Sendable (ParentState) -> State
-  let embed: @Sendable (Action) -> ParentAction
-
-  init(
-    parent: any SagaHost<ParentState, ParentAction>,
-    state: @escaping @Sendable (ParentState) -> State,
-    embed: @escaping @Sendable (Action) -> ParentAction
-  ) {
-    self.parent = parent
-    self.toChildState = state
-    self.embed = embed
-  }
-
-  func dispatch(_ action: Action) async {
-    await parent.dispatch(embed(action))
-  }
-
-  func state() async -> State {
-    toChildState(await parent.state())
-  }
-}
-
 extension SagaContext {
   /// 子の State・Action で書いた Saga を、親の State・Action に接続して、子として起動します。
   ///
-  /// `SagaRuntime.run(_:state:action:embed:)` と同じく子の型のまま動かし、``fork(_:)`` と同じく
-  /// 呼び出し元がキャンセルされると止まります。ログイン中だけ動かす Saga を、ログアウトで止める場合などに使います。
-  /// 子の Saga の未処理のエラーは `onError` に渡し、呼び出し元には伝えません。
+  /// `SagaRuntime.run(_:state:action:embed:)` と同じく子の型のまま動かします。型を付け替えるだけで、
+  /// ほかは ``fork(_:)`` とまったく同じです（呼び出し元のキャンセルで止まり、子の失敗は呼び出し元に伝わり、
+  /// 呼び出し元は子の後始末が終わるまで完了しません）。ログイン中だけ動かす Saga を、ログアウトで止める場合などに使います。
   ///
   /// ```swift
   /// let session = ctx.fork(todoSagas.root, state: \.todo, action: \.todo, embed: AppAction.todo)
@@ -114,20 +67,9 @@ extension SagaContext {
     action: @escaping @Sendable (Action) -> ChildAction?,
     embed: @escaping @Sendable (ChildAction) -> Action
   ) -> SagaTask {
-    fork(saga.name ?? "scope") { ctx in
-      let child = ctx.runtime.run(saga, state: state, action: action, embed: embed)
-      try await withTaskCancellationHandler {
-        do {
-          try await ctx.join(child)
-        } catch is CancellationError {
-          throw CancellationError()
-        } catch {
-          // 子の根で onError に渡し済み。fork の仕組みで親に伝えると、二重に報告されるため伝えない。
-        }
-      } onCancel: {
-        child.cancel()
-      }
-    }
+    fork(
+      saga, in: environment.scoped(state: state, action: action, embed: embed),
+      waitsForFirstEffect: true)
   }
 
   /// 子の Saga を、キーパスで親の State・Action に接続して、子として起動します。

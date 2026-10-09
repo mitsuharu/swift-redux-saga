@@ -3,8 +3,9 @@
 /// Saga の本体に渡されます。Effect はすべてこの型のメソッドです（トップレベル関数にしないのは、
 /// どのランタイムに対する Effect かを型で決め、`take` などの一般的な名前の衝突を避けるため）。
 public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
-  let runtime: SagaRuntime<State, Action>
-  let forks: ForkQueue<SagaRuntime<State, Action>.ForkRequest>
+  let engine: any SagaEngine
+  let environment: SagaEnvironment<State, Action>
+  let forks: ForkQueue<SagaForkRequest>
   let task: SagaTaskState
 
   /// この Saga の識別子。
@@ -13,10 +14,10 @@ public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
   }
 
   private func trigger(_ effect: SagaEffect) {
-    runtime.monitor?.effectTriggered(task.id, effect: effect)
+    engine.monitor?.effectTriggered(task.id, effect: effect)
     switch effect {
     case .put, .select, .call, .join, .delay:
-      runtime.sagaDidReachEffect(task.id)
+      engine.sagaDidReachEffect(task.id)
     case .take:
       // take は待ち始めた（登録した）後に記録する。先に記録すると、溜めた Action が登録より先に届いて取りこぼすため。
       break
@@ -40,8 +41,8 @@ public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
   /// - Throws: 待っている間にキャンセルされた場合は `CancellationError`。
   public func take<Value>(_ pattern: ActionPattern<Action, Value>) async throws -> Value {
     trigger(.take)
-    return try await runtime.multicaster.take(pattern) { [runtime, id] in
-      runtime.sagaDidReachEffect(id)
+    return try await environment.actions.take(pattern) { [engine, id] in
+      engine.sagaDidReachEffect(id)
     }
   }
 
@@ -55,7 +56,7 @@ public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
   /// Action を発行します。Host が Action を処理し終えてから戻ります。
   public func put(_ action: Action) async {
     trigger(.put(String(describing: action)))
-    await runtime.host.dispatch(action)
+    await environment.host.dispatch(action)
   }
 
   // MARK: - select
@@ -63,7 +64,7 @@ public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
   /// 現在の State を返します。
   public func select() async -> State {
     trigger(.select)
-    return await runtime.host.state()
+    return await environment.host.state()
   }
 
   /// 現在の State から値を取り出します。
@@ -83,32 +84,36 @@ public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
   /// 子を ``SagaTask/cancel()`` でキャンセルしても、呼び出し元にエラーは伝わりません。
   @discardableResult
   public func fork(_ saga: Saga<State, Action>) -> SagaTask {
-    fork(saga, waitsForFirstEffect: true)
+    fork(saga, in: environment, waitsForFirstEffect: true)
   }
 
   /// - Parameters:
   ///   - waitsForFirstEffect: 起動中なら、子が最初の Effect に達するまで Action を溜めるか。
   ///     ヘルパー（`takeEvery` など）は呼び出した時点で購読を始めているので、子を待たない。
   ///   - onFailure: 渡すと、子（とその子孫）の失敗を呼び出し元に伝えずに、このハンドラに渡す。
-  func fork(
-    _ saga: Saga<State, Action>, waitsForFirstEffect: Bool,
+  ///   - environment: 子が State・Action を読み書きする相手。子の型に付け替えたもの（scope）も渡せる。
+  func fork<ChildState, ChildAction>(
+    _ saga: Saga<ChildState, ChildAction>,
+    in environment: SagaEnvironment<ChildState, ChildAction>,
+    waitsForFirstEffect: Bool,
     onFailure: (@Sendable (any Error) -> Void)? = nil
   ) -> SagaTask {
-    let state = runtime.makeTaskState(waitsForFirstEffect: waitsForFirstEffect)
+    let state = engine.makeTaskState(waitsForFirstEffect: waitsForFirstEffect)
     let parent = task
     trigger(.fork(state.id))
-    runtime.monitor?.sagaStarted(state.id, name: saga.name, parent: parent.id)
-    runtime.activity.begin()
+    engine.monitor?.sagaStarted(state.id, name: saga.name, parent: parent.id)
+    engine.activity.begin()
     parent.childDidStart()
     let accepted = forks.push(
-      SagaRuntime.ForkRequest { [runtime] in
-        try await runtime.runForked(saga, state: state, parent: parent, onFailure: onFailure)
+      SagaForkRequest { [engine] in
+        try await engine.runForked(
+          saga, in: environment, state: state, parent: parent, onFailure: onFailure)
       })
     if !accepted {
       // 呼び出し元の本体が終わった後に fork された（コンテキストを外に持ち出した）場合。
       parent.childDidFinish(failed: false)
-      runtime.activity.end()
-      runtime.finish(state, .cancelled)
+      engine.activity.end()
+      engine.finish(state, .cancelled)
     }
     return SagaTask(state: state)
   }
@@ -128,7 +133,7 @@ public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
   /// ランタイムの停止（``SagaRuntime/stop()``）ではキャンセルされます。
   @discardableResult
   public func spawn(_ saga: Saga<State, Action>) -> SagaTask {
-    let task = runtime.start(saga)
+    let task = engine.start(saga, in: environment)
     trigger(.spawn(task.id))
     return task
   }
@@ -168,18 +173,18 @@ public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
   /// - Throws: 待っている間にキャンセルされた場合は `CancellationError`。
   public func delay(_ duration: Duration) async throws {
     trigger(.delay(duration))
-    if let clock = runtime.clock as? any ActivityTrackingClock {
-      let activity = runtime.activity
+    if let clock = engine.clock as? any ActivityTrackingClock {
+      let activity = engine.activity
       try await clock.sleep(
         for: duration, onSleep: { activity.end() }, onWake: { activity.begin() })
     } else {
       // 実時間の時計は眠っている Saga を起こす側に手を入れられないため、起きた側で数え直す。
       // 起きてから数え直すまでの間は止まっているとみなされるが、実時間で動くアプリの待ち合わせでは問題にならない。
       // 眠っている間も実行中として数えると、delay を繰り返す Saga があるだけで waitUntilIdle() が戻らなくなる。
-      let activity = runtime.activity
+      let activity = engine.activity
       activity.end()
       defer { activity.begin() }
-      try await runtime.clock.sleep(for: duration)
+      try await engine.clock.sleep(for: duration)
     }
   }
 

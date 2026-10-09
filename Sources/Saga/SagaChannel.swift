@@ -82,7 +82,7 @@ extension SagaContext {
       _ finish: EventChannelFinish
     ) -> @Sendable () -> Void
   ) -> SagaChannel<Value> {
-    let channel = ChannelCore<Value>(buffer: buffer, activity: runtime.activity)
+    let channel = ChannelCore<Value>(buffer: buffer, activity: engine.activity)
     let unsubscribe = subscribe(
       { channel.put($0) }, EventChannelFinish { channel.close(throwing: $0) })
     channel.onClose(unsubscribe)
