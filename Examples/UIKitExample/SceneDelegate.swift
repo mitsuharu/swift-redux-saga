@@ -23,8 +23,16 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
   ) {
     guard let scene = scene as? UIWindowScene else { return }
     let window = UIWindow(windowScene: scene)
-    window.rootViewController = UINavigationController(
+    // MVVM を経由する画面（ToDo）と、Store を直接使う画面（Settings）をタブで並べる。
+    let todo = UINavigationController(
       rootViewController: TodoViewController(viewModel: TodoListViewModel(store: store)))
+    todo.tabBarItem = UITabBarItem(title: "ToDo", image: UIImage(systemName: "checklist"), tag: 0)
+    let settings = UINavigationController(rootViewController: SettingsViewController(store: store))
+    settings.tabBarItem = UITabBarItem(
+      title: "Settings", image: UIImage(systemName: "gear"), tag: 1)
+    let tabBar = UITabBarController()
+    tabBar.viewControllers = [todo, settings]
+    window.rootViewController = tabBar
     window.makeKeyAndVisible()
     self.window = window
   }

@@ -1032,12 +1032,13 @@ Examples/
 ├── ExampleKit/          ローカルパッケージ
 │   ├── Domain           Todo / TodoRepository / TodoUseCase（本ライブラリに依存しない）
 │   └── AppFeature       TodoFeature（Slice）/ TodoSagas / AppStore（組み立て・永続化）/ TodoListViewModel（MVVM）
-├── SwiftUIExample/      SwiftUI アプリ
-├── UIKitExample/        UIKit アプリ（iOS 17 から動くよう observe を使う）
+├── SwiftUIExample/      SwiftUI アプリ（ToDo: MVVM 経由、Settings: Store を直接使う）
+├── UIKitExample/        UIKit アプリ（同上。iOS 17 から動くよう observe を使う）
 └── Examples.xcodeproj   両アプリ（default MainActor isolation を有効にしている）
 ```
 
-- MVVM と併用する。画面特有の状態（入力中の文字列など）は ViewModel（`@Observable`）に持たせ、複数の画面で使うデータと Saga が関わる処理、永続化する設定は Store に置く。ViewModel は Store を読む計算プロパティを公開し、Observation がそのまま連鎖する。View / ViewController は ViewModel だけを見る。UIKit では `ObservationToken.observe` で ViewModel を購読する。
+- 画面ごとに、Store を直接使う書き方（設定画面: 画面特有の状態がない）と、MVVM を経由する書き方（ToDo の画面）を並べて示す。
+- MVVM と併用する画面では、画面特有の状態（入力中の文字列など）は ViewModel（`@Observable`）に持たせ、複数の画面で使うデータと Saga が関わる処理、永続化する設定は Store に置く。ViewModel は Store を読む計算プロパティを公開し、Observation がそのまま連鎖する。View / ViewController は ViewModel だけを見る。UIKit では `ObservationToken.observe` で ViewModel を購読する。
 - Xcode プロジェクトはフォルダ同期（`PBXFileSystemSynchronizedRootGroup`）を使い、ソースの追加でプロジェクトファイルを編集しなくて済むようにする。
 - シミュレータや実機での動作確認には [callstack/agent-device](https://github.com/callstack/agent-device) を使う。
 
