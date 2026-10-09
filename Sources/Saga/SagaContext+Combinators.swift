@@ -4,7 +4,8 @@ extension SagaContext {
   /// すべての処理を並行に実行し、すべての結果を返します（redux-saga の `all`）。
   ///
   /// 各処理は子として fork され、それぞれの ``SagaContext`` を受け取ります。
-  /// いずれかが失敗すると、残りをキャンセルしてそのエラーを投げます。エラーは呼び出し元で catch できます。
+  /// いずれかが失敗すると、残りをキャンセルしてそのエラーを投げます。処理の中で fork した子の失敗も含め、
+  /// エラーは呼び出し元で catch できます。
   ///
   /// ```swift
   /// let (user, posts) = try await ctx.all(
@@ -35,7 +36,9 @@ extension SagaContext {
   /// 処理を並行に実行し、最初に終わった処理の結果だけを返します（redux-saga の `race`）。
   ///
   /// 戻り値は、最初に終わった処理の位置だけが値を持ち、残りは `nil` のタプルです。
-  /// 負けた処理はキャンセルします。最初に終わった処理が失敗した場合は、そのエラーを投げます。
+  /// 負けた処理はキャンセルします。最初に終わった処理が失敗した場合は、そのエラーを投げます
+  /// （処理の中で fork した子の失敗を含みます）。最初に終わった処理がキャンセルで終わった場合は
+  /// `CancellationError` を投げます。
   ///
   /// ```swift
   /// let (response, timeout): (Response?, Void?) = try await ctx.race(
@@ -65,6 +68,11 @@ extension SagaContext {
     if let error = failure(of: winner, in: repeat each branches) {
       throw error
     }
+    // 勝者が値も失敗も残さずに終わった（キャンセルで終わった）場合、全要素が nil のタプルを返すと
+    // 正常な勝者と区別できないため、キャンセルとして投げる。
+    guard hasValue(winner, in: repeat each branches) else {
+      throw CancellationError()
+    }
     var index = 0
     func pick<R>(_ branch: Branch<R>) -> R? {
       defer { index += 1 }
@@ -74,16 +82,23 @@ extension SagaContext {
   }
 
   private func start<R>(_ branch: Branch<R>, name: String) -> SagaTask {
-    fork(name) { ctx in
-      do {
-        branch.finish(.success(try await branch.operation(ctx)))
-      } catch is CancellationError {
-        throw CancellationError()
-      } catch {
-        // 失敗を fork の仕組みで親に伝えると、呼び出し元で catch できないため、結果として持ち帰る。
-        branch.finish(.failure(error))
-      }
+    // 失敗を fork の仕組みで親に伝えると、呼び出し元で catch できないため、結果として持ち帰る。
+    // 処理の本体だけを do / catch で囲まないのは、処理の中で fork した子の失敗が本体を通らずに伝わるため。
+    fork(
+      Saga(name) { ctx in branch.finish(.success(try await branch.operation(ctx))) },
+      waitsForFirstEffect: true,
+      onFailure: { branch.finish(.failure($0)) })
+  }
+
+  /// 位置 `index` の処理が値を残して終わったかを返す。
+  private func hasValue<each R>(_ index: Int, in branches: repeat Branch<each R>) -> Bool {
+    var current = 0
+    var found = false
+    for branch in repeat each branches {
+      if current == index, case .success? = branch.result { found = true }
+      current += 1
     }
+    return found
   }
 
   /// 位置 `index` の処理が失敗していれば、そのエラーを返す。

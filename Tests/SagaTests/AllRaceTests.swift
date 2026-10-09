@@ -122,6 +122,63 @@ private let response = ActionPattern<Action, String>.case {
     try await tester.finish()
   }
 
+  @Test func allLetsTheCallerCatchAFailureOfAChildForkedInsideAnOperation() async throws {
+    let tester = makeTester(
+      Saga { ctx in
+        do {
+          let _: (Void, Void) = try await ctx.all(
+            { ctx in ctx.fork { _ in throw TestError() } },
+            { ctx in try await ctx.delay(.seconds(10)) }
+          )
+        } catch is TestError {
+          await ctx.put(.failed)
+        }
+      })
+    await tester.settle()
+    try tester.receive(.failed)
+    #expect(tester.errors.isEmpty)
+    try await tester.finish()
+  }
+
+  @Test func raceLetsTheCallerCatchAFailureOfAChildForkedInsideTheWinner() async throws {
+    let tester = makeTester(
+      Saga { ctx in
+        do {
+          _ = try await ctx.race(
+            { ctx in ctx.fork { _ in throw TestError() } },
+            { ctx in try await ctx.take(response) }
+          )
+        } catch is TestError {
+          await ctx.put(.failed)
+        }
+      })
+    await tester.settle()
+    try tester.receive(.failed)
+    #expect(tester.errors.isEmpty)
+    try await tester.finish()
+  }
+
+  @Test func raceThrowsCancellationWhenTheWinnerEndsByCancellation() async throws {
+    let tester = makeTester(
+      Saga { ctx in
+        do {
+          let _: (Int?, Int?) = try await ctx.race(
+            { _ -> Int in throw CancellationError() },
+            { ctx in
+              try await ctx.delay(.seconds(10))
+              return 2
+            }
+          )
+          await ctx.put(.result("winner"))
+        } catch is CancellationError {
+          await ctx.put(.result("cancelled"))
+        }
+      })
+    await tester.settle()
+    try tester.receive(.result("cancelled"))
+    try await tester.finish()
+  }
+
   @Test func cancellingTheCallerCancelsEveryOperation() async throws {
     let clock = TestClock()
     let tester = makeTester(

@@ -86,9 +86,14 @@ public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
     fork(saga, waitsForFirstEffect: true)
   }
 
-  /// - Parameter waitsForFirstEffect: 起動中なら、子が最初の Effect に達するまで Action を溜めるか。
-  ///   ヘルパー（`takeEvery` など）は呼び出した時点で購読を始めているので、子を待たない。
-  func fork(_ saga: Saga<State, Action>, waitsForFirstEffect: Bool) -> SagaTask {
+  /// - Parameters:
+  ///   - waitsForFirstEffect: 起動中なら、子が最初の Effect に達するまで Action を溜めるか。
+  ///     ヘルパー（`takeEvery` など）は呼び出した時点で購読を始めているので、子を待たない。
+  ///   - onFailure: 渡すと、子（とその子孫）の失敗を呼び出し元に伝えずに、このハンドラに渡す。
+  func fork(
+    _ saga: Saga<State, Action>, waitsForFirstEffect: Bool,
+    onFailure: (@Sendable (any Error) -> Void)? = nil
+  ) -> SagaTask {
     let state = runtime.makeTaskState(waitsForFirstEffect: waitsForFirstEffect)
     let parent = task
     trigger(.fork(state.id))
@@ -97,7 +102,7 @@ public struct SagaContext<State: Sendable, Action: Sendable>: Sendable {
     parent.childDidStart()
     let accepted = forks.push(
       SagaRuntime.ForkRequest { [runtime] in
-        try await runtime.runForked(saga, state: state, parent: parent)
+        try await runtime.runForked(saga, state: state, parent: parent, onFailure: onFailure)
       })
     if !accepted {
       // 呼び出し元の本体が終わった後に fork された（コンテキストを外に持ち出した）場合。
