@@ -54,6 +54,17 @@ private let byKeyPath = EntityAdapter<Int, Todo>(id: \.id)
     #expect(state.entities[10]?.title == "a")
   }
 
+  @Test func updateOneReplacesTheEntityWhenItsNewIDAlreadyExists() {
+    var state = EntityState<Int, Todo>()
+    byInsertion.setAll(
+      [Todo(id: 1, title: "a"), Todo(id: 2, title: "b"), Todo(id: 3, title: "c")], in: &state)
+    byInsertion.updateOne(1, in: &state) { $0.id = 2 }
+    #expect(state.ids == [2, 3])
+    #expect(state.entities[2]?.title == "a")
+    #expect(state.entities[1] == nil)
+    #expect(byInsertion.count(in: state) == state.entities.count)
+  }
+
   @Test func removeManyDeletesTheEntitiesAndTheirIDs() {
     var state = EntityState<Int, Todo>()
     byInsertion.addMany((1...4).map { Todo(id: $0, title: "\($0)") }, to: &state)

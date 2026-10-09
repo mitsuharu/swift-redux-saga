@@ -95,7 +95,8 @@ public struct EntityAdapter<ID: Hashable & Sendable, Entity: Sendable>: Sendable
 
   /// ID のエンティティを更新します。エンティティがなければ何もしません。
   ///
-  /// 更新で ID が変わった場合は、新しい ID で持ち直します。
+  /// 更新で ID が変わった場合は、新しい ID で持ち直します。新しい ID のエンティティがすでにあれば、
+  /// 更新したエンティティで置き換えます（Redux Toolkit と同じ。ID は重複しません）。
   public func updateOne(
     _ key: ID, in state: inout EntityState<ID, Entity>, _ update: (inout Entity) -> Void
   ) {
@@ -113,7 +114,12 @@ public struct EntityAdapter<ID: Hashable & Sendable, Entity: Sendable>: Sendable
       let newKey = id(entity)
       if newKey != key {
         state.entities[key] = nil
-        if let index = state.ids.firstIndex(of: key) { state.ids[index] = newKey }
+        if state.entities[newKey] != nil {
+          // 新しい ID がすでにあるので、その位置に置き換え、古い ID の位置は消す。
+          state.ids.removeAll { $0 == key }
+        } else if let index = state.ids.firstIndex(of: key) {
+          state.ids[index] = newKey
+        }
       }
       state.entities[newKey] = entity
     }

@@ -449,6 +449,7 @@ extension EntityAdapter where Entity: Identifiable, ID == Entity.ID {
 }
 ```
 
+- `updateOne` で ID を変えた場合は新しい ID で持ち直す。新しい ID がすでにあれば置き換え、`ids` に同じ ID を並べない（RTK と同じ）。
 - RTK の `upsertOne` は部分的な更新をマージするが、Swift には部分型がないため、置き換え（`setOne`）と、クロージャで書き換える `updateOne` に分ける。
 - 並び順を指定した場合は、変更のたびに `ids` を並べ直す。
 
