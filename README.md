@@ -38,7 +38,7 @@ dependencies: [
 | 用途 | 追加するプロダクト | |
 | --- | --- | --- |
 | Redux（Store / Reducer / Slice / Selector など）だけを使う | `Redux` | 必須 |
-| Redux と Saga を使う | `ReduxSaga` | 必須（`Redux` は不要） |
+| Redux と Saga を使う | `ReduxSaga` | 必須（`Redux` と `Saga` を含むので、別に追加しなくてよい） |
 | Saga だけを、ほかの状態管理と組み合わせて使う | `Saga` | 必須 |
 | SwiftUI のヘルパー（`store.binding` / `.store(_:)`） | `ReduxSwiftUI` | 任意 |
 | UIKit のヘルパー（`retained(by:)` / `store.action`） | `ReduxUIKit` | 任意 |
