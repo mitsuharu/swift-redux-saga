@@ -178,13 +178,9 @@ private func makeTester(_ saga: Saga<Int, Action>) -> SagaTester<Int, Action> {
       })
     continuation.yield("x")
     continuation.finish()
-    // シーケンスの読み取りは Saga ではないので settle の対象外。届くまで待つ。
-    while tester.unreceivedActions.count < 2 {
-      await tester.settle()
-      await Task.yield()
-    }
-    try tester.receive(.event("x"))
-    try tester.receive(.closed)
+    // シーケンスの読み取りは settle の対象外。届かなかった場合もテストを失敗として終えられるようにする。
+    try await tester.receive(.event("x"), timeout: .seconds(5))
+    try await tester.receive(.closed, timeout: .seconds(5))
     try await tester.finish()
   }
 }
@@ -242,13 +238,9 @@ private struct Disconnected: Error {}
       })
     continuation.yield("x")
     continuation.finish(throwing: Disconnected())
-    // シーケンスの読み取りは Saga ではないので settle の対象外。届くまで待つ。
-    while tester.unreceivedActions.count < 2 {
-      await tester.settle()
-      await Task.yield()
-    }
-    try tester.receive(.event("x"))
-    try tester.receive(.event("disconnected"))
+    // シーケンスの読み取りは settle の対象外。届かなかった場合もテストを失敗として終えられるようにする。
+    try await tester.receive(.event("x"), timeout: .seconds(5))
+    try await tester.receive(.event("disconnected"), timeout: .seconds(5))
     try await tester.finish()
   }
 

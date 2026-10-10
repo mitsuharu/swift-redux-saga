@@ -95,17 +95,13 @@ private let reducer = Reducer<ListState, ListAction> { state, action in
     let store = Store(initialState: ListState(), reducer: reducer)
     var titles = store.values { $0.title }.makeAsyncIterator()
     #expect(await titles.next() == "a")
-    // 掃除が何度か起きるだけ更新する（title は読まれ続けているが値は変わらない）。
-    for _ in 0..<600 {
-      store.dispatch(.touchOther)
-      await Task.yield()
+    // 各回の掃除の通知を実際に受け取り、再購読が済んでから次の掃除へ進む。
+    // Task.yield の回数で非同期の読み直しを待たない。
+    for _ in 0..<3 {
+      for _ in 0..<512 { store.dispatch(.touchOther) }
+      #expect(await titles.next() == "a")
     }
     store.dispatch(.rename("b"))
-    var latest = await titles.next()
-    while latest == "a" {
-      // 掃除の通知で、同じ値が届くことがある。
-      latest = await titles.next()
-    }
-    #expect(latest == "b")
+    #expect(await titles.next() == "b")
   }
 }

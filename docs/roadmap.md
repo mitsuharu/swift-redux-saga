@@ -136,3 +136,4 @@
 | 12-21 | `ci/minimum-swift` | 最低対応の Swift 6.2 でも Linux でビルドとテスト （[#73](https://github.com/mitsuharu/swift-redux-saga/pull/73)） |
 | 12-22 | `fix/review-runtime-lifecycles` | チャネルのキャンセル時に、ほかの受信者向けの値と終了理由を保つ （[#77](https://github.com/mitsuharu/swift-redux-saga/pull/77)） |
 | 12-23 | `fix/take-leading-startup` | takeLeading の登録直後の最初の Action を保ち、実行中の追加の Action は捨てる （[#78](https://github.com/mitsuharu/swift-redux-saga/pull/78)） |
+| 12-24 | `fix/deterministic-test-waits` | 購読の再登録を通知で待ち、AsyncSequence の終了テストに待機上限を設ける （[#79](https://github.com/mitsuharu/swift-redux-saga/pull/79)） |
