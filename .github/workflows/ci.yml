@@ -4,7 +4,7 @@
 #   - Format: swift format による lint
 #   - macOS:  SwiftPM でのビルドとテスト
 #   - iOS:    xcodebuild で iOS シミュレータ向けのビルドとテスト
-#   - Linux:  UI に依存しないターゲットのビルドとテスト
+#   - Linux:  UI に依存しないターゲットのビルドとテスト（最低対応の Swift 6.2 と、最新の 6.3）
 #   - Other platforms: tvOS / watchOS / visionOS 向けのビルド
 #   - Examples: サンプルアプリのロジック（Examples/ExampleKit）のビルドとテスト、アプリのビルド
 #
@@ -140,20 +140,27 @@ jobs:
             -skipMacroValidation
 
   linux:
-    name: Linux
+    name: Linux (Swift ${{ matrix.swift }})
     # Saga / Redux のコアは Apple 以外でも動くことを保証したい。macOS より安価でもある。
     # runner に入っている Swift ではなく公式コンテナを使い、バージョンを固定する。
+    # 最低対応（README の「Swift 6.2 以降」）の 6.2 系でも確かめる。macOS では Xcode に同梱の版しか
+    # 選べないため、言語とコンパイラの最低版は Linux で確かめる。6.2 系の版は Docker Hub の
+    # library/swift のタグで確認した最新（6.2.4）。
     runs-on: ubuntu-24.04
-    container: swift:6.3.3-noble
+    container: swift:${{ matrix.swift }}-noble
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        swift: ["6.2.4", "6.3.3"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .build
-          key: spm-linux-${{ hashFiles('Package.swift', 'Package.resolved') }}-${{ hashFiles('Sources/**', 'Tests/**') }}
+          key: spm-linux-${{ matrix.swift }}-${{ hashFiles('Package.swift', 'Package.resolved') }}-${{ hashFiles('Sources/**', 'Tests/**') }}
           restore-keys: |
-            spm-linux-${{ hashFiles('Package.swift', 'Package.resolved') }}-
+            spm-linux-${{ matrix.swift }}-${{ hashFiles('Package.swift', 'Package.resolved') }}-
       - name: Build
         run: swift build --build-tests
       - name: Test
