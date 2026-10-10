@@ -16,8 +16,8 @@ public final class PersistenceMiddleware<State: Sendable, Action: Sendable>: Mid
   private let clock: any Clock<Duration>
   private let onError: @Sendable (any Error) -> Void
   private var pending: (task: Task<Void, Never>, isSuperseded: Locked<Bool>)?
-  // 最後に作った保存の Task。保存を待っているかどうか（pending）とは別に持つのは、flush() で pending を
-  // 外した後に作った保存も、書き込み中の保存の後に書くため。
+  // 最後に作った保存・削除の完了を待つ Task。pending と別に持つのは、flush() / clear() が
+  // 待っている間に新しく予約された保存も、それまでの書き込み・削除の後に実行するため。
   private var lastSave: Task<Void, Never>?
 
   /// ミドルウェアを作ります。
@@ -69,15 +69,25 @@ public final class PersistenceMiddleware<State: Sendable, Action: Sendable>: Mid
   ///
   /// ログアウトなどで保存したデータを消すときは、`Persistence.clear()` ではなくこのメソッドを使ってください。
   /// `Persistence.clear()` で直接消すと、保存を待っていた State が後から書かれ、消したデータが戻ります。
-  /// 消した後に State が変わった場合は、通常どおり保存します。
+  /// この呼び出しが待っている間に予約された保存は、削除が終わってから実行します。
+  /// 削除はメインアクターの外で行い、失敗した場合はそのエラーを投げます。
   public func clear() async throws {
     if let pending {
       self.pending = nil
       pending.isSuperseded.withLock { $0 = true }
       pending.task.cancel()
     }
-    await lastSave?.value
-    try remove()
+    let previous = lastSave
+    let remove = remove
+    let removal = Task.detached {
+      await previous?.value
+      try remove()
+    }
+    // await の前に後続処理の待機先を置く。呼び出し元だけが前の保存を待つと、その間に
+    // 予約された新しい保存が削除より先に完了し、新しいデータまで消してしまうため。
+    // 失敗は clear の呼び出し元へ返し、後続の保存・削除には伝播させない。
+    lastSave = Task.detached { _ = await removal.result }
+    try await removal.value
   }
 
   private func schedule(_ state: State) {
