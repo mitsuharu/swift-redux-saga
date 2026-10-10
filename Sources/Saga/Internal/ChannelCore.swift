@@ -26,7 +26,7 @@ final class ChannelCore<Value: Sendable>: Sendable {
     var isClosed = false
     /// 閉じた理由のエラー。溜まっている値を受け取り終えた後の take で 1 回だけ投げる。
     var failure: (any Error)?
-    var onClose: (@Sendable () -> Void)?
+    var onClose: [@Sendable () -> Void] = []
   }
 
   private enum TakeOutcome {
@@ -45,11 +45,12 @@ final class ChannelCore<Value: Sendable>: Sendable {
     self.activity = activity
   }
 
-  /// 閉じたときに呼ぶ処理を登録する（購読の解除など）。すでに閉じていれば、その場で呼ぶ。
+  /// 閉じたときに呼ぶ処理を登録する（購読の解除、作成元の Saga の終了監視の解除など）。
+  /// すでに閉じていれば、その場で呼ぶ。
   func onClose(_ handler: @escaping @Sendable () -> Void) {
     let isClosed = storage.withLock { storage -> Bool in
       if storage.isClosed { return true }
-      storage.onClose = handler
+      storage.onClose.append(handler)
       return false
     }
     if isClosed { handler() }
@@ -126,9 +127,9 @@ final class ChannelCore<Value: Sendable>: Sendable {
     let (takers, failed, onClose) = storage.withLock {
       storage -> (
         [CheckedContinuation<Value?, any Error>], CheckedContinuation<Value?, any Error>?,
-        (@Sendable () -> Void)?
+        [@Sendable () -> Void]
       ) in
-      guard !storage.isClosed else { return ([], nil, nil) }
+      guard !storage.isClosed else { return ([], nil, []) }
       storage.isClosed = true
       var takers = storage.takers.map(\.continuation)
       var failed: CheckedContinuation<Value?, any Error>?
@@ -142,11 +143,11 @@ final class ChannelCore<Value: Sendable>: Sendable {
       // 受け取り側が待っているのはバッファが空のときだけなので、待っている全員に nil を渡してよい。
       defer {
         storage.takers = []
-        storage.onClose = nil
+        storage.onClose = []
       }
       return (takers, failed, storage.onClose)
     }
-    onClose?()
+    for handler in onClose { handler() }
     if let failed, let error {
       activity.begin()
       failed.resume(throwing: error)
