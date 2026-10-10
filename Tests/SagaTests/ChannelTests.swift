@@ -183,6 +183,27 @@ private struct Disconnected: Error {}
     try await tester.finish()
   }
 
+  @Test func anAsyncSequenceThatEndsWithCancellationErrorEndsTheChannel() async throws {
+    let (stream, continuation) = AsyncThrowingStream.makeStream(of: String.self)
+    let tester = makeTester(
+      Saga { ctx in
+        do {
+          for try await event in ctx.eventChannel(from: stream) {
+            await ctx.put(.event(event))
+          }
+        } catch is CancellationError {
+          // 入力元が CancellationError で終わった（この Saga はキャンセルされていない）。
+          await ctx.put(.closed)
+        }
+      })
+    continuation.yield("x")
+    continuation.finish(throwing: CancellationError())
+    // シーケンスの読み取りは Saga ではないので settle の対象外。届くまで待つ。
+    try await tester.receive(.event("x"), timeout: .seconds(5))
+    try await tester.receive(.closed, timeout: .seconds(5))
+    try await tester.finish()
+  }
+
   @Test func finishingWithAnErrorThrowsItToTheWaitingTaker() async throws {
     let finish = Locked<EventChannelFinish?>(nil)
     let tester = makeTester(
