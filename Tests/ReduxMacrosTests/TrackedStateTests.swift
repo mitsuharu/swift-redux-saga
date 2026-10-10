@@ -155,3 +155,23 @@ let trackedReducer = Reducer<TrackedAppState, TrackedAppAction> { state, action 
     #expect(kept?.name == "")  // Store の解放後に読んでも落ちない
   }
 }
+
+@MainActor
+@Suite struct ScopedTrackedStateTests {
+  @Test func aScopedStoreTracksNestedPropertiesOfTrackedState() {
+    let store = Store(initialState: TrackedAppState(), reducer: trackedReducer)
+    let profile = store.scope(state: \.profile, action: { (action: TrackedAppAction) in action })
+    let cityChanged = Locked(false)
+    withObservationTracking {
+      _ = profile.address.city
+    } onChange: {
+      cityChanged.withLock { $0 = true }
+    }
+    // 子の Store でも、読んだネストしたプロパティが変わったときだけ通知される。
+    store.dispatch(.rename("x"))
+    #expect(cityChanged.withLock { $0 } == false)
+    store.dispatch(.move("tokyo"))
+    #expect(cityChanged.withLock { $0 })
+    #expect(profile.address.city == "tokyo")
+  }
+}
