@@ -77,10 +77,11 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          # `## [<バージョン>]` の見出しから、次の `## [` の見出しの前までを取り出す。
+          # `## [<バージョン>]` の見出しから、次の `## [` の見出しか、末尾のリンクの定義（`[0.1.0]: https://...`）
+          # の前までを取り出す。リンクの定義はほかのバージョンのものも含むので、リリースノートに入れない。
           awk -v version="$VERSION" '
             index($0, "## [" version "]") == 1 { found = 1; next }
-            found && /^## \[/ { exit }
+            found && (/^## \[/ || /^\[[^]]+\]: /) { exit }
             found { print }
           ' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
           if [ ! -s "$RUNNER_TEMP/notes.md" ]; then
