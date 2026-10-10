@@ -66,8 +66,7 @@ private final class OrderedStorage: PersistenceStorage {
 
 private struct RemovalFailure: Error {}
 
-@MainActor
-@Suite(.serialized) struct PersistenceOperationOrderTests {
+extension PersistenceSaveOrderTests {
   @Test(arguments: [false, true])
   func aSaveScheduledDuringClearRunsAfterTheRemoval(cancelCaller: Bool) async throws {
     let storage = OrderedStorage()

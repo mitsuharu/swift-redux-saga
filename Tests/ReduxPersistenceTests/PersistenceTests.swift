@@ -194,8 +194,10 @@ private final class GatedStorage: PersistenceStorage {
   func remove(key: String) throws { latest.withLock { $0 = nil } }
 }
 
+// 同期ストレージを止めるテストを同時に走らせると、少ない実行スレッドを占有し、
+// ゲートを開く処理まで進めなくなるため、保存・削除の順序テストは同じスイートで直列に行う。
 @MainActor
-@Suite struct PersistenceSaveOrderTests {
+@Suite(.serialized) struct PersistenceSaveOrderTests {
   @Test func aNewerStateIsNotOverwrittenByASlowerOlderSave() async throws {
     let storage = GatedStorage()
     let clock = TestClock()
@@ -251,8 +253,7 @@ extension PersistenceSaveOrderTests {
   }
 }
 
-@MainActor
-@Suite struct PersistenceClearTests {
+extension PersistenceSaveOrderTests {
   @Test func clearingThroughTheMiddlewareDiscardsAPendingSave() async throws {
     let storage = InMemoryStorage()
     let persistence = makePersistence(storage)
