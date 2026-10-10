@@ -10,6 +10,7 @@ import Redux
 @MainActor
 public final class PersistenceMiddleware<State: Sendable, Action: Sendable>: Middleware {
   private let save: @Sendable (State) throws -> Void
+  private let remove: @Sendable () throws -> Void
   private let hasChanged: (State, State) -> Bool
   private let debounce: Duration
   private let clock: any Clock<Duration>
@@ -33,6 +34,7 @@ public final class PersistenceMiddleware<State: Sendable, Action: Sendable>: Mid
     onError: @escaping @Sendable (any Error) -> Void = { _ in }
   ) {
     self.save = { try persistence.save($0) }
+    self.remove = { try persistence.clear() }
     // スナップショットが Equatable なら、保存する部分が変わったときだけ保存する。
     // そうでなければ、State が変わるたびに保存する（debounce でまとめられる）。
     self.hasChanged = { old, new in
@@ -61,6 +63,21 @@ public final class PersistenceMiddleware<State: Sendable, Action: Sendable>: Mid
     }
     // 保存はそれぞれ前の保存の後に書くので、最後の保存を待てば、それまでの保存はすべて終わっている。
     await lastSave?.value
+  }
+
+  /// 保存したデータを消します。保存を待っている State は保存せず、書き込み中の保存が終わってから消します。
+  ///
+  /// ログアウトなどで保存したデータを消すときは、`Persistence.clear()` ではなくこのメソッドを使ってください。
+  /// `Persistence.clear()` で直接消すと、保存を待っていた State が後から書かれ、消したデータが戻ります。
+  /// 消した後に State が変わった場合は、通常どおり保存します。
+  public func clear() async throws {
+    if let pending {
+      self.pending = nil
+      pending.isSuperseded.withLock { $0 = true }
+      pending.task.cancel()
+    }
+    await lastSave?.value
+    try remove()
   }
 
   private func schedule(_ state: State) {

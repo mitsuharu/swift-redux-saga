@@ -252,6 +252,41 @@ extension PersistenceSaveOrderTests {
 }
 
 @MainActor
+@Suite struct PersistenceClearTests {
+  @Test func clearingThroughTheMiddlewareDiscardsAPendingSave() async throws {
+    let storage = InMemoryStorage()
+    let persistence = makePersistence(storage)
+    let middleware = PersistenceMiddleware<AppState, Action>(persistence, clock: TestClock())
+    let store = Store(initialState: AppState(), reducer: reducer, middleware: [middleware])
+    store.dispatch(.setTheme("dark"))  // 保存を待っている
+    // ログアウトなどで保存したデータを消す。
+    try await middleware.clear()
+    await middleware.flush()
+    #expect(try persistence.load() == nil)
+    // 消した後の変更は、通常どおり保存する。
+    store.dispatch(.setTheme("blue"))
+    await middleware.flush()
+    #expect(try persistence.load()?.theme == "blue")
+  }
+
+  @Test func clearingWaitsForAWriteInProgress() async throws {
+    let storage = GatedStorage()
+    let middleware = PersistenceMiddleware<AppState, Action>(
+      Persistence(key: "settings", storage: storage, keyPath: \.settings), clock: TestClock())
+    let store = Store(initialState: AppState(), reducer: reducer, middleware: [middleware])
+    store.dispatch(.setTheme("dark"))
+    let flushed = Task { await middleware.flush() }
+    while storage.startedSaves == 0 { await Task.yield() }  // 書き込み中で止まっている
+    let cleared = Task { try await middleware.clear() }
+    storage.release()
+    await flushed.value
+    try await cleared.value
+    // 書き込みが終わってから消すので、書き込み中だった State は残らない。
+    #expect(try storage.load(key: "settings") == nil)
+  }
+}
+
+@MainActor
 @Suite struct PersistenceMemoryTests {
   @Test func storeWithAPendingSaveIsReleased() async {
     weak var weakStore: Store<AppState, Action>?

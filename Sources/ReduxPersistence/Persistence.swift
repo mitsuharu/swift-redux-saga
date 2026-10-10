@@ -128,6 +128,9 @@ public struct Persistence<State: Sendable, Snapshot: Codable & Sendable>: Sendab
   }
 
   /// 保存した値を消します。
+  ///
+  /// `PersistenceMiddleware` を使っている場合は、`PersistenceMiddleware.clear()` を使ってください
+  /// （保存を待っている State が後から書かれ、消したデータが戻るのを防ぐため）。
   public func clear() throws {
     try storage.remove(key: key)
   }

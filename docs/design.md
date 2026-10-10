@@ -592,6 +592,7 @@ public final class PersistenceMiddleware<State, Action>: Middleware {
   public init(_ persistence: Persistence<State, Snapshot>, debounce: Duration = .milliseconds(500),
               clock: any Clock<Duration> = ContinuousClock(), onError:)
   public func flush() async   // 待っている保存をすぐ行う（バックグラウンドに入るときなど）
+  public func clear() async throws   // 待っている保存を捨て、書き込みの後に消す（ログアウトなど）
 }
 ```
 
@@ -607,6 +608,7 @@ let store = Store(
 - 保存は、スナップショットが変わったとき（`Equatable` なら比較する）に、最後の変化から `debounce` 後に 1 回だけ行う。エンコードと書き込みは `Task.detached` でメインアクターの外で行う。
 - 保存が重なったときは、前の保存の書き込みが終わってから書く（古い State が後から書かれて残らないようにする）。`flush()` は書き込み中の保存の終わりも待つ。
 - アプリは、バックグラウンドに入るときに `flush()` を呼ぶ（`debounce` の間に終了されると保存されないため）。
+- 保存したデータを消すときは `PersistenceMiddleware.clear()` を使う。保存を待っている State を捨て、書き込み中の保存が終わってから消す。`Persistence.clear()` で直接消すと、保存を待っていた State が後から書かれて戻るため。
 - Saga ではなくミドルウェアにするのは、Saga を使わないアプリでも使えるようにするため。
 - 保存するのは、設定や下書きなど保存してよいものに絞る。読み込み中やエラーのような一時的な状態は保存しない。
 
