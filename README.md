@@ -200,7 +200,7 @@ Saga の `action:` には `@ActionCases` が生成する case のプロパティ
 `sagaMiddleware.run` で起動した Saga は、呼び出し元の Task とは独立して動き、`stop()` で止めると二度と動きません（`stop()` は Store を捨てるときのためのものです）。画面の表示中だけ、ログイン中だけ動かす Saga は、次のように起動と停止を対応させます。
 
 - **アプリの起動中ずっと**: Store を作った直後に `run` します。
-- **ログイン中だけ**: ルート Saga の中で `ctx.fork` で起動し、ログアウトで `ctx.cancel` します。止めると通信中の読み込みや保存もキャンセルされるので、ログアウト後に古い結果が届きません。再ログインで起動し直します（[Example の `RootSagas`](Examples/ExampleKit/Sources/AppFeature/RootFeature.swift)）。
+- **ログイン中だけ**: ルート Saga の中で `ctx.fork` で起動し、ログアウトで `ctx.cancel` します。止めると通信中の読み込みや保存もキャンセルされます。再ログインで起動し直します（[Example の `RootSagas`](Examples/ExampleKit/Sources/AppFeature/RootFeature.swift)）。
 
   ```swift
   while true {
@@ -210,6 +210,8 @@ Saga の `action:` には `@ActionCases` が生成する case のプロパティ
     ctx.cancel(session)
   }
   ```
+
+  ただし、キャンセルは「通信が終わってから `put` するまで」の間には間に合わないことがあり、ログアウト後に前のセッションの結果が届き得ます。結果を確実に捨てるには、State に世代（セッションの番号）を持たせ、Saga は処理を始めた時点の世代を結果の Action に含め、reducer で今の世代と違う結果を捨ててください（Example の `TodoFeature.State.generation`）。
 
 - **画面の表示中だけ**: SwiftUI では `.task` の中で `run` し、`.task` のキャンセル（画面の破棄）で Saga をキャンセルします。`run` は呼び出し元の Task のキャンセルを受け取らないため、`withTaskCancellationHandler` でつなぎます。UIKit では `viewDidAppear` で `run` し、`viewDidDisappear` で返された `SagaTask` を `cancel()` します。
 
@@ -540,7 +542,7 @@ Examples/
 
 - ToDo の Saga はログイン中だけ動き、ログアウトで止まります（`RootSagas`）。
 - ToDo の画面は MVVM を経由し（画面特有の状態は ViewModel、共有データと Saga が関わる処理は Store）、設定の画面は Store を直接使っています。
-- `@Slice` / `@ActionCases`、`@BindableState`、`takeLatest` / `actionChannel` / `debounce`、`LoggingMiddleware`、設定の永続化（`ReduxPersistence`）、`TestStore` によるテストを使っています。
+- `@Slice` / `@ActionCases`、`@BindableState`、`actionChannel` / `debounce` / `takeLeading`、`LoggingMiddleware`、設定の永続化（`ReduxPersistence`）、`TestStore` によるテストを使っています。
 
 `Examples/Examples.xcodeproj` を Xcode で開いて実行できます。
 

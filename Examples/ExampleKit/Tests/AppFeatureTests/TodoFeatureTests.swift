@@ -39,7 +39,7 @@ private func makeStore(_ todos: [Todo] = [milk, bread]) -> TestStore<
     let store = makeStore()
     await store.settle()
     try store.receive(.refresh) { $0.isLoading = true }
-    try store.receive(.loaded([milk, bread])) {
+    try store.receive(.loaded([milk, bread], generation: 0)) {
       $0.isLoading = false
       $0.todos.ids = [milk.id, bread.id]
       $0.todos.entities = [milk.id: milk, bread.id: bread]
@@ -61,7 +61,7 @@ private func makeStore(_ todos: [Todo] = [milk, bread]) -> TestStore<
     await store.settle()
     store.skipReceivedActions()
     try await store.send(.add(title: "eggs"))
-    let added = try store.receive(.case(\.added))
+    let (added, _) = try store.receive(.case(\.added))
     #expect(added.title == "eggs")
     #expect(TodoFeature.visibleTodos(store.state).map(\.title) == ["eggs"])
     try await store.finish()
@@ -85,7 +85,7 @@ private func makeStore(_ todos: [Todo] = [milk, bread]) -> TestStore<
     try await store.send(.toggleTapped(milk.id))
     var done = milk
     done.isDone = true
-    try store.receive(.updated(done)) { $0.todos.entities[milk.id] = done }
+    try store.receive(.updated(done, generation: 0)) { $0.todos.entities[milk.id] = done }
     try await store.finish()
   }
 
@@ -94,7 +94,7 @@ private func makeStore(_ todos: [Todo] = [milk, bread]) -> TestStore<
     await store.settle()
     store.skipReceivedActions()
     try await store.send(.deleteTapped(milk.id))
-    try store.receive(.deleted(milk.id)) {
+    try store.receive(.deleted(milk.id, generation: 0)) {
       $0.todos.ids = [bread.id]
       $0.todos.entities[milk.id] = nil
     }
@@ -122,7 +122,7 @@ private func makeStore(_ todos: [Todo] = [milk, bread]) -> TestStore<
     )
     await store.settle()
     try store.receive(.refresh) { $0.isLoading = true }
-    try store.receive(.failed("offline")) {
+    try store.receive(.failed("offline", generation: 0)) {
       $0.isLoading = false
       $0.errorMessage = "offline"
     }
@@ -161,5 +161,14 @@ private func makeStore(_ todos: [Todo] = [milk, bread]) -> TestStore<
     components.store.dispatch(.todo(.add(title: "tea")))
     await components.sagaMiddleware.waitUntilIdle()
     #expect(TodoFeature.visibleTodos(components.store.todo).map(\.title) == ["eggs", "tea"])
+  }
+
+  @Test func aDeleteRequestedDuringARefreshIsNotUndoneByTheRefresh() async {
+    let components = await make([milk, bread])
+    // 読み込みの途中で削除する。削除が先に終わっても、後から届いた古い一覧で戻ってはいけない。
+    components.store.dispatch(.todo(.refresh))
+    components.store.dispatch(.todo(.deleteTapped(milk.id)))
+    await components.sagaMiddleware.waitUntilIdle()
+    #expect(components.store.todo.todos.ids == [bread.id])
   }
 }

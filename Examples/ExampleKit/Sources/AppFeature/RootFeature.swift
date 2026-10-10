@@ -24,11 +24,14 @@ public enum RootFeature {
   public static let reducer = Reducer<State, Action> {
     Reducer.slice(AuthFeature.self, state: \.auth, action: \.auth)
     Reducer.slice(TodoFeature.self, state: \.todo, action: \.todo)
-    // ログアウトしたら、ToDo の一覧を消す（設定は残す）。
+    // ログアウトしたら、ToDo の一覧を消し（設定は残す）、世代を進める。
+    // 世代を進めると、ログアウト前に始まった処理の結果が後から届いても、ToDo の reducer が捨てる。
     Reducer { state, action in
       if case .auth(.loggedOut) = action {
         state.todo.todos = EntityState()
+        state.todo.isLoading = false
         state.todo.errorMessage = nil
+        state.todo.generation += 1
       }
     }
   }
@@ -37,8 +40,10 @@ public enum RootFeature {
 /// アプリ全体の Saga。機能ごとの Saga を、子の型のまま親に接続する。
 ///
 /// - ログインの Saga は、アプリの起動中ずっと動かす。
-/// - ToDo の Saga は、ログインしている間だけ動かす。ログアウトでキャンセルするので、
-///   通信中の読み込みや保存も止まり、ログアウト後に古い結果が届かない。再ログインで起動し直す。
+/// - ToDo の Saga は、ログインしている間だけ動かす。ログアウトでキャンセルして通信中の読み込みや保存を止め、
+///   再ログインで起動し直す。
+/// - キャンセルだけでは、通信が終わってから put するまでの間にログアウトされた結果が届き得るので、
+///   ToDo の結果には世代を含め、ログアウトで世代を進めて捨てる（`TodoFeature.State.generation`）。
 public struct RootSagas: Sendable {
   private let auth: AuthSagas
   private let todo: TodoSagas
