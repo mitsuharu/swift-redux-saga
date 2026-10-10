@@ -141,3 +141,4 @@
 | 12-26 | `fix/persistence-operation-order` | 削除を保存と同じ順序に並べ、削除待ちの間に予約された新しい保存を失わない （[#82](https://github.com/mitsuharu/swift-redux-saga/pull/82)） |
 | 12-27 | `fix/example-auth-event-gap` | Example で認証 State の読み取り中に届いた再ログインを取りこぼさない （[#84](https://github.com/mitsuharu/swift-redux-saga/pull/84)） |
 | 12-28 | `ci/release-workflow` | タグの push か手動実行で、タグと GitHub Release を作るワークフロー |
+| 12-29 | `ci/release-generated-notes` | リリースノートに、自動で作る PR の一覧を付ける |
