@@ -56,6 +56,12 @@ public final class SagaTester<State: Sendable, Action: Sendable>: Sendable {
     self.task = runtime.run(saga)
   }
 
+  // 手放したら Saga を止める。止めるのを finish() だけに任せると、検証が途中で失敗して finish() に
+  // 届かなかったテストで、Saga（と Saga が捕捉したオブジェクト）が残るため。検証は finish() だけで行う。
+  deinit {
+    runtime.stop()
+  }
+
   /// 現在の State。
   public var state: State {
     host.state

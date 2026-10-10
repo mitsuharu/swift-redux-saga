@@ -5,7 +5,8 @@ extension SagaContext {
   ///
   /// 各処理は子として fork され、それぞれの ``SagaContext`` を受け取ります。
   /// いずれかが失敗すると、残りをキャンセルしてそのエラーを投げます。処理の中で fork した子の失敗も含め、
-  /// エラーは呼び出し元で catch できます。
+  /// エラーは呼び出し元で catch できます。いずれかがキャンセルで終わった場合も、残りをキャンセルして
+  /// `CancellationError` を投げます。
   ///
   /// ```swift
   /// let (user, posts) = try await ctx.all(
@@ -25,9 +26,16 @@ extension SagaContext {
     while !remaining.isEmpty {
       let finished = try await waitForAny(of: tasks, among: remaining)
       remaining.remove(finished)
-      if case .failed(let error) = outcome(of: finished, in: repeat each branches) {
+      switch outcome(of: finished, in: repeat each branches) {
+      case .completed:
+        break
+      case .failed(let error):
         for task in tasks { task.cancel() }
         throw error
+      case .cancelled:
+        // 1 つでもキャンセルで終わったら、すべての結果はそろわないので、残りを待たずにキャンセルとして投げる。
+        for task in tasks { task.cancel() }
+        throw CancellationError()
       }
     }
     return (repeat try (each branches).value())

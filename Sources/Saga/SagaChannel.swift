@@ -121,9 +121,15 @@ extension SagaContext {
   }
 
   private func closeWhenFinished<Value>(_ channel: ChannelCore<Value>) {
-    if task.addObserver({ channel.close() }) == nil {
+    // チャネルを先に閉じたら、終了の監視を外す。外さないと、監視がチャネルを持ち続け、閉じて手放した
+    // チャネル（と溜まっている値）が、作成元の Saga が終わるまで残るため。
+    // 監視を弱参照にしないのは、閉じないまま手放したチャネルも、作成元の Saga の終わりで閉じて
+    // 購読を解除する（イベント源の unsubscribe を呼ぶ）必要があるため。
+    guard let id = task.addObserver({ channel.close() }) else {
       channel.close()
+      return
     }
+    channel.onClose { [task] in task.removeObserver(id) }
   }
 }
 
