@@ -200,7 +200,7 @@ Saga の `action:` には `@ActionCases` が生成する case のプロパティ
 `sagaMiddleware.run` で起動した Saga は、呼び出し元の Task とは独立して動き、`stop()` で止めると二度と動きません（`stop()` は Store を捨てるときのためのものです）。画面の表示中だけ、ログイン中だけ動かす Saga は、次のように起動と停止を対応させます。
 
 - **アプリの起動中ずっと**: Store を作った直後に `run` します。
-- **ログイン中だけ**: ルート Saga の中で `ctx.fork` で起動し、ログアウトで `ctx.cancel` します。止めると通信中の読み込みや保存もキャンセルされます。再ログインで起動し直します（[Example の `RootSagas`](Examples/ExampleKit/Sources/AppFeature/RootFeature.swift)）。
+- **ログイン中だけ**: ルート Saga の中で `ctx.fork` で起動し、ログアウトで `ctx.cancel` します。止めると通信中の読み込みや保存もキャンセルされます。再ログインで起動し直します（[Example の `RootSagas`](Examples/ExampleKit/Sources/AppFeature/RootFeature.swift)）。State の読み取りや切り替え処理の間に届く認証イベントは、先に `actionChannel` を作って保持します。
 
   ```swift
   while true {

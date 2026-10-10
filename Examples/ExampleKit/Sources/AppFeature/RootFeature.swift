@@ -55,14 +55,23 @@ public struct RootSagas: Sendable {
 
   public var root: Saga<RootFeature.State, RootFeature.Action> {
     Saga("root") { ctx in
+      // select は非同期なので、State を読んでから take を登録する間にも認証が変わり得る。
+      // 先に購読し、ログイン・ログアウトの完了をセッションの切り替え中も保持する。
+      let authEvents = ctx.actionChannel(
+        ActionPattern<RootFeature.Action, AuthFeature.Action>.case(\.auth).where {
+          switch $0 {
+          case .loggedIn, .loggedOut: true
+          default: false
+          }
+        })
       ctx.fork(auth.root, state: \.auth, action: \.auth, embed: RootFeature.Action.auth)
       while true {
         if await ctx.select(\.auth.user) == nil {
-          _ = try await ctx.take(.case(\.auth?.loggedIn))
+          guard try await authEvents.first(where: { $0.loggedIn != nil }) != nil else { return }
         }
         let session = ctx.fork(
           todo.root, state: \.todo, action: \.todo, embed: RootFeature.Action.todo)
-        _ = try await ctx.take(.case(\.auth?.loggedOut))
+        guard try await authEvents.first(where: { $0 == .loggedOut }) != nil else { return }
         ctx.cancel(session)
       }
     }
