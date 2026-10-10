@@ -6,10 +6,6 @@
 
 最初のリリース（0.1.0）に向けた内容です。リリースの PR で、この節を `## [0.1.0] - 日付` にします。
 
-### Example
-
-- UIKit Example の更新コントロールの循環参照を解消
-
 ### Redux（`Redux`）
 
 - `Store`（`@MainActor`、`Observable`）。読んだプロパティだけを追跡するキーパス単位の Observation、dispatch 中の dispatch はキューで後から処理
@@ -23,10 +19,6 @@
 - `LoggingMiddleware`（`os.Logger`、既定でデバッグビルドのみ）
 
 ### Saga（`Saga` / `ReduxSaga`）
-
-- `takeLeading` が購読登録からワーカーの待機開始までに届いた最初の Action を落とす問題を修正
-
-- キャンセル済みのチャネル受信者が、バッファの値や終了理由を消費してしまう問題を修正
 
 - 構造化並行性で実装した Saga ランタイム。`SagaHost` プロトコル越しに動き、Redux に依存しない
 - Effect: `take` / `put` / `select` / `call`（任意の async 関数）/ `fork`（attached）/ `spawn`（detached）/ `cancel` / `join` / `delay`
@@ -43,7 +35,7 @@
 
 ### 永続化（`ReduxPersistence`）
 
-- `Persistence`（バージョンと移行）、`PersistenceMiddleware`、保存先（`UserDefaultsStorage` / `FileStorage` / `InMemoryStorage`）
+- `Persistence`（バージョンと移行）、`PersistenceMiddleware`（保存を待っている State を捨てて消す `clear()`、すぐに保存する `flush()`）、保存先（`UserDefaultsStorage` / `FileStorage` / `InMemoryStorage`）
 
 ### UI（`ReduxSwiftUI` / `ReduxUIKit`）
 
