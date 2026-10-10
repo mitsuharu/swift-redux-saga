@@ -103,9 +103,9 @@ final class TodoViewController: UIViewController {
     }
     let refreshControl = UIRefreshControl()
     refreshControl.addAction(
-      UIAction { [weak self] _ in
+      UIAction { [weak self] action in
         self?.viewModel.refresh()
-        refreshControl.endRefreshing()
+        (action.sender as? UIRefreshControl)?.endRefreshing()
       },
       for: .valueChanged)
     tableView.refreshControl = refreshControl
