@@ -17,17 +17,20 @@ private struct Item: Sendable, Equatable, Identifiable {
 private struct ListState: Sendable, Equatable {
   var items: [Item] = []
   var other = 0
+  var title = "a"
 }
 
 private enum ListAction: Sendable {
   case keep(Int)
   case touchOther
+  case rename(String)
 }
 
 private let reducer = Reducer<ListState, ListAction> { state, action in
   switch action {
   case .keep(let count): state.items = Array(state.items.prefix(count))
   case .touchOther: state.other += 1
+  case .rename(let title): state.title = title
   }
 }
 
@@ -68,5 +71,41 @@ private let reducer = Reducer<ListState, ListAction> { state, action in
     }
     store.dispatch(.keep(1))
     #expect(changed.withLock { $0 })
+  }
+
+  @Test func keyPathsThatAreNoLongerReadAreSweptEvenIfTheirValueNeverChanges() {
+    let store = Store(initialState: ListState(items: [Item(rawID: 0)]), reducer: reducer)
+    // 削除済みの ID を 1,000 件読み直した（値は nil のまま変わらない）。
+    for id in 1...1000 {
+      withObservationTracking {
+        _ = store[dynamicMember: \.items[id: id]]
+      } onChange: {
+      }
+    }
+    // 関係のない更新が続くと、読まれなくなったキーパスは外れる。
+    for _ in 0..<2100 {
+      store.dispatch(.touchOther)
+    }
+    Item.reads.withLock { $0 = 0 }
+    store.dispatch(.touchOther)
+    #expect(Item.reads.withLock { $0 } <= 4)
+  }
+
+  @Test func anObserverOfAnUnchangingValueKeepsBeingNotifiedAcrossSweeps() async {
+    let store = Store(initialState: ListState(), reducer: reducer)
+    var titles = store.values { $0.title }.makeAsyncIterator()
+    #expect(await titles.next() == "a")
+    // 掃除が何度か起きるだけ更新する（title は読まれ続けているが値は変わらない）。
+    for _ in 0..<600 {
+      store.dispatch(.touchOther)
+      await Task.yield()
+    }
+    store.dispatch(.rename("b"))
+    var latest = await titles.next()
+    while latest == "a" {
+      // 掃除の通知で、同じ値が届くことがある。
+      latest = await titles.next()
+    }
+    #expect(latest == "b")
   }
 }
