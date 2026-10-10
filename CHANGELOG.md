@@ -6,6 +6,10 @@
 
 最初のリリース（0.1.0）に向けた内容です。リリースの PR で、この節を `## [0.1.0] - 日付` にします。
 
+### Example
+
+- UIKit Example の更新コントロールの循環参照を解消
+
 ### Redux（`Redux`）
 
 - `Store`（`@MainActor`、`Observable`）。読んだプロパティだけを追跡するキーパス単位の Observation、dispatch 中の dispatch はキューで後から処理
