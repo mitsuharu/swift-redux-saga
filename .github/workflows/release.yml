@@ -1,0 +1,126 @@
+# swift-redux-saga のリリース。
+#
+# 次のどちらかで、そのバージョンの GitHub Release を作る。
+#   - タグ（`0.1.0` の形式、`v` を付けない）を push する
+#   - Actions の画面から手動で実行し（workflow_dispatch）、バージョンを入れる。
+#     タグがなければ、実行したブランチ（通常は main）の先頭のコミットにタグを打つ
+#
+# リリースノートは CHANGELOG.md の `## [<バージョン>]` の節から作る。節がない場合は失敗させる
+# （AGENTS.md のとおり、リリースの PR で CHANGELOG を更新してから実行する）。
+#
+# アクションはタグではなくコミット SHA で固定している（ルールは AGENTS.md）。
+
+name: Release
+
+on:
+  push:
+    tags:
+      # SemVer の形（例: 0.1.0, 1.0.0-beta.1）だけ。`v` 付きのタグでは動かさない。
+      - "[0-9]+.[0-9]+.[0-9]+"
+      - "[0-9]+.[0-9]+.[0-9]+-*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "リリースするバージョン（例: 0.1.0。v は付けない）"
+        required: true
+        type: string
+
+# 同じバージョンのリリースが同時に走らないようにする（タグの push と手動実行が重なった場合など）。
+concurrency:
+  group: release-${{ inputs.version || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  # タグの push と GitHub Release の作成に書き込みが要る。ほかの権限は使わない。
+  contents: write
+
+jobs:
+  release:
+    name: Release
+    # ビルドは CI（ci.yml）で済んでいるので、タグとリリースを作るだけの安価な Linux で動かす。
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # 既存のタグを確かめるため、タグも取得する。
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Resolve version
+        id: version
+        env:
+          # 入力値をシェルに直接埋め込まない（スクリプトの差し込みを防ぐ）。
+          INPUT_VERSION: ${{ inputs.version }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            version="$INPUT_VERSION"
+          else
+            version="$REF_NAME"
+          fi
+          # SemVer（`v` なし、プレリリースは `-` の後ろ）だけを受け付ける。
+          if ! echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::バージョンは 0.1.0 の形式で指定してください（v は付けない）: $version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          # `-` を含むバージョンはプレリリースとして公開する。
+          if echo "$version" | grep -q -- '-'; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Extract release notes from CHANGELOG
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # `## [<バージョン>]` の見出しから、次の `## [` の見出しの前までを取り出す。
+          awk -v version="$VERSION" '
+            index($0, "## [" version "]") == 1 { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          if [ ! -s "$RUNNER_TEMP/notes.md" ]; then
+            echo "::error::CHANGELOG.md に「## [$VERSION]」の節がありません。リリースの PR で追加してから実行してください。"
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/notes.md"
+
+      - name: Create the tag if it does not exist
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if git rev-parse -q --verify "refs/tags/$VERSION" > /dev/null; then
+            echo "タグ $VERSION はすでにあるので、そのタグでリリースを作ります。"
+          else
+            # 注釈付きタグにするのは、誰がいつ打ったかをタグに残すため。
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$VERSION" -m "$VERSION" "$GITHUB_SHA"
+            # GITHUB_TOKEN で push したタグは、このワークフロー（タグの push）を再び起動しない。
+            # そのため、リリースはこの実行の中で作る。
+            git push origin "refs/tags/$VERSION"
+          fi
+
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+        run: |
+          if gh release view "$VERSION" > /dev/null 2>&1; then
+            echo "GitHub Release $VERSION はすでにあります。作り直さずに終えます。"
+            exit 0
+          fi
+          flags=""
+          if [ "$PRERELEASE" = "true" ]; then flags="--prerelease"; fi
+          # --verify-tag で、タグがない場合に gh が勝手にタグを作らないようにする。
+          gh release create "$VERSION" \
+            --verify-tag \
+            --title "$VERSION" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
+            $flags
