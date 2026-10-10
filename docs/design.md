@@ -859,6 +859,7 @@ public struct SagaChannel<Value: Sendable>: Sendable, AsyncSequence {
 }
 ```
 
+- チャネルの `take` / iteration は、受け取り側がキャンセル済みなら、バッファの値や終了理由を消費せず `CancellationError` を投げる。閉じたチャネルも同じで、残りの値やエラーはキャンセルされていない受け取り側へ渡す。
 - チャネルは作った Saga の終了で自動的に閉じる。閉じ忘れによる購読のリークを防ぐため（redux-saga では明示的に閉じる必要がある）。
 - `eventChannel(from:)` のシーケンスの読み取りは、チャネルが持つ非構造化の `Task` で行う。外部のイベント源の寿命が Saga の木と一致しないため。チャネルが閉じたらキャンセルする。
 

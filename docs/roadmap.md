@@ -134,3 +134,4 @@
 | 12-19 | `fix/example-stale-results` | Example で、ログアウト前や読み込み中の古い結果が State に入らない （[#71](https://github.com/mitsuharu/swift-redux-saga/pull/71)） |
 | 12-20 | `fix/event-channel-cancellation` | `eventChannel` の入力が `CancellationError` で終わってもチャネルを閉じる （[#72](https://github.com/mitsuharu/swift-redux-saga/pull/72)） |
 | 12-21 | `ci/minimum-swift` | 最低対応の Swift 6.2 でも Linux でビルドとテスト （[#73](https://github.com/mitsuharu/swift-redux-saga/pull/73)） |
+| 12-22 | `fix/review-runtime-lifecycles` | チャネルのキャンセル時に、ほかの受信者向けの値と終了理由を保つ （[#77](https://github.com/mitsuharu/swift-redux-saga/pull/77)） |

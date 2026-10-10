@@ -17,7 +17,8 @@ public struct SagaChannel<Value: Sendable>: Sendable, AsyncSequence {
 
   /// 次の値を待ちます。チャネルが閉じられ、溜まっている値もなくなったら `nil` を返します。
   ///
-  /// - Throws: 待っている間にキャンセルされた場合は `CancellationError`。
+  /// - Throws: 呼び出す前か待っている間にキャンセルされた場合は `CancellationError`。
+  ///   キャンセル済みなら、バッファの値やチャネルの終了理由は消費しません。
   public func take() async throws -> Value? {
     try await core.take()
   }
