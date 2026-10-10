@@ -109,9 +109,10 @@ extension SagaContext {
             emit(event)
           }
           finish()
-        } catch is CancellationError {
-          // チャネルが閉じられて読み取りをやめた場合。すでに閉じているので何もしない。
         } catch {
+          // CancellationError も区別せずに伝える。チャネルが閉じられて読み取りをやめた場合は、
+          // すでに閉じているので何も起きない。シーケンス自体が CancellationError で終わった場合は、
+          // 伝えないとチャネルが開いたままになり、受け取り側が待ち続けるため。
           finish(throwing: error)
         }
       }
