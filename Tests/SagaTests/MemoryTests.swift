@@ -1,3 +1,4 @@
+import InternalPrimitives
 import Testing
 
 @testable import Saga
@@ -99,5 +100,58 @@ private let everySaga = Saga<Int, Action>("every") { ctx in
     }
     #expect(await eventuallyReleased { weakTester == nil })
     #expect(await eventuallyReleased { weakRuntime == nil })
+  }
+}
+
+/// 解放を確かめるためのオブジェクト。
+private final class Payload: Sendable {}
+
+@Suite struct EarlyExitMemoryTests {
+  @Test func aChannelClosedAndDroppedIsReleasedBeforeItsCreatorFinishes() async throws {
+    let emit = Locked<(@Sendable (Payload) -> Void)?>(nil)
+    let channel = Locked<SagaChannel<Payload>?>(nil)
+    let tester = SagaTester<Int, Action>(
+      initialState: 0, reduce: { _, _ in },
+      saga: Saga { ctx in
+        do {
+          let events = ctx.eventChannel { (send: @escaping @Sendable (Payload) -> Void, _) in
+            emit.withLock { $0 = send }
+            return {}
+          }
+          channel.withLock { $0 = events }
+        }
+        // 作成元の Saga は、チャネルを手放した後も動き続ける（接続と切断を繰り返す長寿命の Saga）。
+        _ = try await ctx.take(request)
+      })
+    await tester.settle()
+    weak var weakPayload: Payload?
+    do {
+      let payload = Payload()
+      weakPayload = payload
+      emit.withLock { $0 }?(payload)  // 受け取らないまま溜まる
+    }
+    // 閉じて手放す。
+    channel.withLock { $0 }?.close()
+    channel.withLock { $0 = nil }
+    emit.withLock { $0 = nil }
+    #expect(await eventuallyReleased { weakPayload == nil })
+    try await tester.finish()
+  }
+
+  @Test func releasingASagaTesterWithoutFinishingStopsItsSagas() async {
+    weak var weakPayload: Payload?
+    do {
+      let payload = Payload()
+      weakPayload = payload
+      let tester = SagaTester<Int, Action>(
+        initialState: 0, reduce: { _, _ in },
+        saga: Saga { ctx in
+          _ = try await ctx.take(request)
+          _ = payload
+        })
+      await tester.settle()
+      // 検証が途中で失敗し、finish() に届かないまま手放した。
+    }
+    #expect(await eventuallyReleased { weakPayload == nil })
   }
 }

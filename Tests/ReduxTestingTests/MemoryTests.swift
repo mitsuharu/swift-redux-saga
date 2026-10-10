@@ -40,3 +40,25 @@ private func eventuallyReleased(_ isReleased: () -> Bool) async -> Bool {
     #expect(await eventuallyReleased { weakStore == nil })
   }
 }
+
+private final class Payload: Sendable {}
+
+@MainActor
+@Suite struct TestStoreEarlyExitMemoryTests {
+  @Test func releasingATestStoreWithoutFinishingStopsItsSagas() async {
+    weak var weakPayload: Payload?
+    do {
+      let payload = Payload()
+      weakPayload = payload
+      let store = TestStore<Int, Action>(
+        initialState: 0, reducer: Reducer { _, _ in },
+        saga: Saga { ctx in
+          _ = try await ctx.take()
+          _ = payload
+        })
+      await store.settle()
+      // 検証が途中で失敗し、finish() に届かないまま手放した。
+    }
+    #expect(await eventuallyReleased { weakPayload == nil })
+  }
+}
