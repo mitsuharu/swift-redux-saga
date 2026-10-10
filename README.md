@@ -163,6 +163,34 @@ struct CounterSagas: Sendable {
 | `all` / `race` | `try await ctx.all(...)` / `try await ctx.race(...)` |
 | `actionChannel` / `eventChannel` | `ctx.actionChannel(...)` / `ctx.eventChannel(...)` |
 
+ワーカーは、redux-saga の `takeLatest(FETCH, fetchUser)` のように、別に定義した関数を名前で渡すこともできます。ワーカーの型は `(SagaContext, 値) async throws -> Void` です。
+
+```swift
+struct CounterSagas: Sendable {
+  let repository: CounterRepository
+
+  var root: Saga<Counter.State, Counter.Action> {
+    Saga("counter") { ctx in
+      ctx.takeLatest(.action(.fetch), fetch)   // 関数を渡す
+    }
+  }
+
+  // redux-saga の function* fetch(action) に当たるワーカー
+  func fetch(_ ctx: SagaContext<Counter.State, Counter.Action>, _ action: Counter.Action) async throws {
+    do {
+      let value = try await ctx.call(repository.load)
+      await ctx.put(.fetched(value))
+    } catch is CancellationError {
+    } catch {
+      // エラーも Action にして返す
+    }
+  }
+}
+```
+
+- 渡せるのは、メソッド（依存を `self` から使える）、static 関数、ファイル内の関数のどれでもよいです。`Sendable` な struct のメソッドはそのまま渡せます。ファイル内の関数は `@Sendable func` で定義します。
+- 2 つ目の引数は、パターンが取り出した値です（`.case(\.fetch)` なら関連値、`.action(...)` / `.filter { ... }` なら Action そのもの）。
+
 Action の判定は `ActionPattern` で行います。enum の case から値を型付きで取り出せます。
 
 ```swift
