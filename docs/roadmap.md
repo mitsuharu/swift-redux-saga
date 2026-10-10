@@ -107,7 +107,7 @@
 | 11-5 | `refactor/shared-advance` | 時計を進める処理を `TestClock` にまとめる （[#42](https://github.com/mitsuharu/swift-redux-saga/pull/42)） |
 | 11-6 | `docs/review` | ドキュメントの見直し、プロダクトを用途ごとに使えるようにする （[#46](https://github.com/mitsuharu/swift-redux-saga/pull/46)） |
 | 11-8 | `feature/example-direct-store` | Example に Store を直接使う画面を追加し、MVVM 経由と並べる （[#47](https://github.com/mitsuharu/swift-redux-saga/pull/47)） |
-| 11-7 | `docs/release-0.1.0` | 0.1.0 のリリース（CHANGELOG、README のインストール手順） |
+| 11-7 | `docs/release-0.1.0` | 0.1.0 のリリース（CHANGELOG、README のインストール手順） （[#86](https://github.com/mitsuharu/swift-redux-saga/pull/86)） |
 
 ## M12: 実用面の見直し
 

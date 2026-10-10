@@ -4,7 +4,9 @@
 
 ## [Unreleased]
 
-最初のリリース（0.1.0）に向けた内容です。リリースの PR で、この節を `## [0.1.0] - 日付` にします。
+## [0.1.0] - 2026-10-11
+
+最初のリリースです。
 
 ### Redux（`Redux`）
 
@@ -46,3 +48,6 @@
 
 - `TestClock`、`SagaTester`、`TestStore`。実時間ではなく「すべての Saga が Effect で止まったか」で待ち合わせる
 - 通信が重なる場面のテスト（待たずに送る `dispatch` と、届くまで待つ `receive(_:timeout:)`）
+
+[Unreleased]: https://github.com/mitsuharu/swift-redux-saga/compare/0.1.0...HEAD
+[0.1.0]: https://github.com/mitsuharu/swift-redux-saga/releases/tag/0.1.0
