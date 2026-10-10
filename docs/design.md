@@ -841,7 +841,7 @@ extension ActionPattern where Value == Action, Action: Equatable {
 | `delay` | `func delay(_ duration: Duration) async throws` | ランタイムに注入した `Clock` を使う |
 | `takeEvery` | `func takeEvery<V>(_ p, _ worker: (SagaContext, V) async throws -> Void) -> SagaTask` | 非ブロッキング（内部で fork）。ワーカーは並行に動く |
 | `takeLatest` | `func takeLatest<V>(_ p, _ worker) -> SagaTask` | 前回のワーカーをキャンセルしてから起動 |
-| `takeLeading` | `func takeLeading<V>(_ p, _ worker) -> SagaTask` | 実行中に届いた Action は捨てる |
+| `takeLeading` | `func takeLeading<V>(_ p, _ worker) -> SagaTask` | 最初の Action を受け取った時点で実行枠を予約し、ワーカーの実行が終わるまで追加の Action は捨てる |
 | `debounce` | `func debounce<V>(_ d: Duration, _ p, _ worker) -> SagaTask` | 静かな期間の後に最後の Action で起動。起動したワーカーは後の Action でキャンセルしない |
 | `throttle` | `func throttle<V>(_ d: Duration, _ p, _ worker) -> SagaTask` | 起動後 `d` の間は最新の 1 件だけ残し、`d` の後に処理する |
 | `all` | `func all<each R>(_ ops: repeat @Sendable (SagaContext) async throws -> each R) async throws -> (repeat each R)` | 各処理は fork した子で、自分の ctx を受け取る。1 つでも失敗したら他をキャンセルし、エラーは呼び出し元で catch できる（処理の中で fork した子の失敗も含む）。1 つでもキャンセルで終わったら、他をキャンセルして `CancellationError` を投げる |
@@ -882,6 +882,7 @@ public struct SagaChannel<Value: Sendable>: Sendable, AsyncSequence {
 - `take` は 1 回限りの taker を登録して待つ。キャンセルされたら登録を外して `CancellationError` を投げる。購読が溜まることはない。
 - `take` を繰り返すループでは、ワーカーの実行中に来た Action は受け取れない（redux-saga と同じ）。取りこぼしたくない場合は `actionChannel` か `takeEvery` を使う。
 - `takeEvery` などのヘルパーは、呼び出した時点で購読（内部のチャネル）を始め、取りこぼさない。チャネルはヘルパーの終了時に閉じ、購読を外す。
+- `takeLeading` は、購読開始からワーカーの起動までの最初の Action も受け付ける。受信時に実行枠を予約し、ワーカーの終了で解放する。予約した 1 件だけを内部チャネルで保持し、予約中の追加の Action は溜めない。
 - 内部のチャネルに `AsyncStream` を使わないのは、受け取り側の再開を Activity で数える必要があるため（値を渡す側が数える）。
 
 ### 6.8 時間

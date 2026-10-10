@@ -1,3 +1,4 @@
+import InternalPrimitives
 import Testing
 
 @testable import Saga
@@ -26,6 +27,29 @@ private func makeTester(_ saga: Saga<Int, Action>) -> SagaTester<Int, Action> {
 }
 
 @Suite struct TakeHelperTests {
+  @Test func takeLeadingAcceptsTheFirstActionBeforeItsLoopStarts() async throws {
+    let onStart = Locked<(@Sendable () -> Void)?>(nil)
+    let host = TestHost<Int, Action>(initialState: 0) { _, _ in }
+    let runtime = SagaRuntime(host: host, monitor: LeadingStartupMonitor(onStart: onStart))
+    onStart.withLock {
+      $0 = {
+        runtime.emit(.fetch(1))
+        runtime.emit(.fetch(2))
+      }
+    }
+    defer { onStart.withLock { $0 = nil } }
+    let task = runtime.run(
+      Saga { ctx in
+        // 起動時のバッファを抜けてから登録し、ヘルパー自身の購読の準備を確かめる。
+        _ = await ctx.select()
+        ctx.takeLeading(fetch) { ctx, id in await ctx.put(.loaded(id)) }
+      })
+    await runtime.waitUntilIdle()
+    #expect(host.dispatched == [.loaded(1)])
+    runtime.stop()
+    _ = try? await task.join()
+  }
+
   @Test func takeEveryRunsAWorkerForEveryActionConcurrently() async throws {
     let tester = makeTester(Saga { ctx in ctx.takeEvery(fetch, load) })
     await tester.send(.fetch(2))
@@ -74,12 +98,13 @@ private func makeTester(_ saga: Saga<Int, Action>) -> SagaTester<Int, Action> {
     try await tester.finish()
   }
 
-  @Test func cancellingAHelperStopsItsWorkersAndUnsubscribes() async throws {
+  @Test(arguments: [false, true])
+  func cancellingAHelperStopsItsWorkersAndUnsubscribes(leading: Bool) async throws {
     let clock = TestClock()
     let tester = SagaTester<Int, Action>(
       initialState: 0, reduce: { _, _ in },
       saga: Saga { ctx in
-        let helper = ctx.takeEvery(fetch, load)
+        let helper = leading ? ctx.takeLeading(fetch, load) : ctx.takeEvery(fetch, load)
         _ = try await ctx.take(.action(.stop))
         ctx.cancel(helper)
       },
@@ -105,5 +130,27 @@ private func makeTester(_ saga: Saga<Int, Action>) -> SagaTester<Int, Action> {
     #expect(tester.errors.first?.underlying is TestError)
     #expect(tester.errors.first?.sagaStack == ["takeEvery.worker", "takeEvery", "root"])
     await #expect(throws: SagaTesterFailure.self) { try await tester.finish() }
+  }
+
+  @Test func aFailingLeadingWorkerUnsubscribesAndFailsTheCaller() async throws {
+    let tester = makeTester(
+      Saga("root") { ctx in
+        ctx.takeLeading(fetch) { _, _ in throw TestError() }
+      })
+    await tester.send(.fetch(1))
+    #expect(!tester.isRunning)
+    #expect(tester.runtime.multicaster.subscriberCount == 0)
+    #expect(tester.errors.first?.underlying is TestError)
+    #expect(tester.errors.first?.sagaStack == ["takeLeading", "root"])
+    await #expect(throws: SagaTesterFailure.self) { try await tester.finish() }
+  }
+}
+
+private struct LeadingStartupMonitor: SagaMonitor {
+  let onStart: Locked<(@Sendable () -> Void)?>
+
+  func sagaStarted(_ id: SagaID, name: String?, parent: SagaID?) {
+    // 購読の登録後、ヘルパーの起動要求を積む前に発行する。スケジューラの速さに依存させない。
+    if name == "takeLeading" { onStart.withLock { $0 }?() }
   }
 }

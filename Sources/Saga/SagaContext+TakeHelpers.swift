@@ -80,6 +80,7 @@ extension SagaContext {
   /// ワーカーが実行中でなければ `worker` を起動し、実行中に届いた Action は無視します（redux-saga の `takeLeading`）。
   ///
   /// 二重送信を防ぎたいボタンの処理などに使います。
+  /// 登録直後の最初の Action も受け付け、ワーカーが動き出すまでの間の追加の Action は無視します。
   ///
   /// - Returns: ヘルパーのハンドル。キャンセルするとワーカーも止まります。
   @discardableResult
@@ -87,10 +88,22 @@ extension SagaContext {
     _ pattern: ActionPattern<Action, Value>,
     _ worker: @escaping @Sendable (SagaContext, Value) async throws -> Void
   ) -> SagaTask {
-    // 実行中の Action を溜めないよう、バッファを持たないチャネルにする（受け取り側が待っているときだけ渡る）。
-    let channel = subscribe(pattern, buffer: .oldest(0))
+    // 受け取った時点で実行枠を予約する。バッファなしだと、登録からヘルパーの待機開始までの Action を
+    // 落とす。バッファだけを 1 件にすると、実行中の Action まで次の処理として溜めてしまう。
+    let busy = Locked(false)
+    let channel = ChannelCore<Value>(buffer: .oldest(1), activity: engine.activity)
+    let unsubscribe = environment.actions.subscribe { action in
+      guard let value = pattern.match(action) else { return }
+      let accepted = busy.withLock { busy in
+        guard !busy else { return false }
+        busy = true
+        return true
+      }
+      if accepted { channel.put(value) }
+    }
+    channel.onClose(unsubscribe)
     return forkLoop("takeLeading", channel) { ctx, value in
-      // fork せずにその場で実行する。実行中はチャネルを待っていないので、届いた Action は捨てられる。
+      defer { busy.withLock { $0 = false } }
       try await worker(ctx, value)
     }
   }
