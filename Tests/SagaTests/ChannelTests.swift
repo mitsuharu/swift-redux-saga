@@ -21,6 +21,40 @@ private func makeTester(_ saga: Saga<Int, Action>) -> SagaTester<Int, Action> {
 }
 
 @Suite struct ChannelTests {
+  @Test(arguments: [false, true])
+  func aCancelledConsumerLeavesBufferedValuesForOtherConsumers(closeBeforeCancellation: Bool)
+    async throws
+  {
+    let tester = makeTester(
+      Saga { ctx in
+        let requests = ctx.actionChannel(request)
+        let consumer = ctx.fork { ctx in
+          do {
+            _ = try await ctx.take(.action(.request(-1)))
+          } catch is CancellationError {
+            do {
+              if let value = try await requests.take() { await ctx.put(.handled(value)) }
+            } catch is CancellationError {
+              await ctx.put(.event("cancelled"))
+            }
+          }
+        }
+        _ = try await ctx.take(.action(.stop))
+        if closeBeforeCancellation { requests.close() }
+        ctx.cancel(consumer)
+        _ = try? await ctx.join(consumer)
+        requests.close()
+        for try await value in requests { await ctx.put(.handled(value)) }
+        await ctx.put(.closed)
+      })
+    await tester.send(.request(1))
+    await tester.send(.request(2))
+    await tester.send(.stop)
+    #expect(tester.unreceivedActions == [.event("cancelled"), .handled(1), .handled(2), .closed])
+    tester.skipReceivedActions()
+    try await tester.finish()
+  }
+
   @Test func actionChannelQueuesActionsSoTheyAreHandledOneByOneInOrder() async throws {
     let tester = makeTester(
       Saga { ctx in
@@ -158,6 +192,41 @@ private func makeTester(_ saga: Saga<Int, Action>) -> SagaTester<Int, Action> {
 private struct Disconnected: Error {}
 
 @Suite struct EventChannelErrorTests {
+  @Test func aCancelledConsumerDoesNotConsumeTheChannelFailure() async throws {
+    let tester = makeTester(
+      Saga { ctx in
+        let events = ctx.eventChannel { (_: @escaping @Sendable (String) -> Void, finish) in
+          finish(throwing: Disconnected())
+          return {}
+        }
+        let consumer = ctx.fork { ctx in
+          do {
+            _ = try await ctx.take(.action(.request(-1)))
+          } catch is CancellationError {
+            do {
+              _ = try await events.take()
+            } catch is CancellationError {
+              await ctx.put(.event("cancelled"))
+            } catch {
+              await ctx.put(.event("unexpected failure"))
+            }
+          }
+        }
+        _ = try await ctx.take(.action(.stop))
+        ctx.cancel(consumer)
+        _ = try? await ctx.join(consumer)
+        do {
+          _ = try await events.take()
+        } catch is Disconnected {
+          await ctx.put(.closed)
+        }
+      })
+    await tester.send(.stop)
+    #expect(tester.unreceivedActions == [.event("cancelled"), .closed])
+    tester.skipReceivedActions()
+    try await tester.finish()
+  }
+
   @Test func anAsyncSequenceThatEndsWithAnErrorThrowsItAfterTheBufferedValues() async throws {
     let (stream, continuation) = AsyncThrowingStream.makeStream(of: String.self)
     let tester = makeTester(

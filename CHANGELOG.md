@@ -20,6 +20,8 @@
 
 ### Saga（`Saga` / `ReduxSaga`）
 
+- キャンセル済みのチャネル受信者が、バッファの値や終了理由を消費してしまう問題を修正
+
 - 構造化並行性で実装した Saga ランタイム。`SagaHost` プロトコル越しに動き、Redux に依存しない
 - Effect: `take` / `put` / `select` / `call`（任意の async 関数）/ `fork`（attached）/ `spawn`（detached）/ `cancel` / `join` / `delay`
 - ヘルパー: `takeEvery` / `takeLatest` / `takeLeading` / `debounce` / `throttle`、組み合わせ: `all` / `race`

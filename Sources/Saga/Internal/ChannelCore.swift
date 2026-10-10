@@ -89,13 +89,14 @@ final class ChannelCore<Value: Sendable>: Sendable {
     return try await withTaskCancellationHandler {
       try await withCheckedThrowingContinuation { continuation in
         let outcome = storage.withLock { storage -> TakeOutcome in
+          // キャンセル済みの受け取り側に、ほかのワーカー向けの値や終了理由を消費させない。
+          guard !Task.isCancelled else { return .cancelled }
           if !storage.buffer.isEmpty { return .value(storage.buffer.removeFirst()) }
           if storage.isClosed {
             guard let failure = storage.failure else { return .value(nil) }
             storage.failure = nil
             return .failure(failure)
           }
-          guard !Task.isCancelled else { return .cancelled }
           storage.takers.append((id, continuation))
           return .waiting
         }
