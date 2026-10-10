@@ -62,7 +62,8 @@
 
 - バージョンは Semantic Versioning。1.0.0 までは、マイナーバージョンでも公開 API が変わり得る。
 - 公開 API や振る舞いを変えた PR は、`CHANGELOG.md` の `Unreleased` に追記する。最初のリリース（0.1.0）までは、`Unreleased` は最初のリリースの機能の一覧として書き、未リリースの機能の修正（利用者が一度も使っていない振る舞いの修正）は書かない。
-- リリースは PR で `CHANGELOG.md` と README のインストール手順を更新し、マージ後にタグ（`0.1.0` の形式、`v` を付けない）と GitHub Release を作る。タグと GitHub Release は公開されて取り消しにくいので、作る前に作者（@mitsuharu）に確認する。
+- リリースは PR で `CHANGELOG.md`（`## [0.1.0] - 日付` の節）と README のインストール手順を更新し、マージ後にタグ（`0.1.0` の形式、`v` を付けない）と GitHub Release を作る。タグと GitHub Release は公開されて取り消しにくいので、作る前に作者（@mitsuharu）に確認する。
+- タグと GitHub Release は Release ワークフロー（`.github/workflows/release.yml`）で作る。タグを push するか、Actions の画面から手動で実行してバージョンを入れる（タグがなければ、実行したブランチの先頭に打つ）。リリースノートは `CHANGELOG.md` の該当の節から作り、節がなければ失敗する。
 
 ## 完了の定義（各 PR 共通）
 
