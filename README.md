@@ -337,7 +337,7 @@ let store = Store(
 }
 ```
 
-ログアウトなどで保存したデータを消すときは、`persistence.clear()` ではなく `try await persistenceMiddleware.clear()` を使ってください。保存を待っている State を捨ててから消すので、後から書かれて戻ることがありません。
+ログアウトなどで保存したデータを消すときは、`persistence.clear()` ではなく `try await persistenceMiddleware.clear()` を使ってください。保存を待っている State を捨ててから消すので、後から書かれて戻ることがありません。`clear()` の待機中に新しく予約された保存は、削除の完了後に実行されます。
 
 保存形式を変えたときは `version` を上げ、`migrate` で古い形式から変換できます。読み込み中やエラーのような一時的な状態は保存しないでください。
 
