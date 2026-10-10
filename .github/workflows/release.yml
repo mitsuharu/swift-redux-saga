@@ -5,7 +5,8 @@
 #   - Actions の画面から手動で実行し（workflow_dispatch）、バージョンを入れる。
 #     タグがなければ、実行したブランチ（通常は main）の先頭のコミットにタグを打つ
 #
-# リリースノートは CHANGELOG.md の `## [<バージョン>]` の節から作る。節がない場合は失敗させる
+# リリースノートは CHANGELOG.md の `## [<バージョン>]` の節と、GitHub が自動で作る PR の一覧
+# （前のリリースからマージされた PR と、新しい貢献者）を並べたもの。CHANGELOG の節がない場合は失敗させる
 # （AGENTS.md のとおり、リリースの PR で CHANGELOG を更新してから実行する）。
 #
 # アクションはタグではなくコミット SHA で固定している（ルールは AGENTS.md）。
@@ -120,8 +121,12 @@ jobs:
           flags=""
           if [ "$PRERELEASE" = "true" ]; then flags="--prerelease"; fi
           # --verify-tag で、タグがない場合に gh が勝手にタグを作らないようにする。
+          # --generate-notes で、CHANGELOG の節の後ろに、前のリリースからの PR の一覧を自動で付ける。
+          # CHANGELOG だけにしないのは、利用者向けの要約（CHANGELOG）と、変更の経緯をたどる PR の一覧の
+          # 両方を 1 か所で見られるようにするため。
           gh release create "$VERSION" \
             --verify-tag \
             --title "$VERSION" \
             --notes-file "$RUNNER_TEMP/notes.md" \
+            --generate-notes \
             $flags
