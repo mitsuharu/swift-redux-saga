@@ -138,3 +138,4 @@
 | 12-23 | `fix/take-leading-startup` | takeLeading の登録直後の最初の Action を保ち、実行中の追加の Action は捨てる （[#78](https://github.com/mitsuharu/swift-redux-saga/pull/78)） |
 | 12-24 | `fix/deterministic-test-waits` | 購読の再登録を通知で待ち、AsyncSequence の終了テストに待機上限を設ける （[#79](https://github.com/mitsuharu/swift-redux-saga/pull/79)） |
 | 12-25 | `fix/example-refresh-control-lifetime` | UIKit Example の更新コントロールが自分自身を保持する循環参照を解消する （[#80](https://github.com/mitsuharu/swift-redux-saga/pull/80)） |
+| 12-27 | `fix/example-auth-event-gap` | Example で認証 State の読み取り中に届いた再ログインを取りこぼさない （[#84](https://github.com/mitsuharu/swift-redux-saga/pull/84)） |
