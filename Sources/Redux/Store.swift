@@ -25,7 +25,11 @@ public final class Store<State: Sendable, Action: Sendable>: Observable {
   // 読まれたキーパスごとの、新旧の State で値が変わったかを判定する関数。キーは State 上のキーパス。
   // 値が変わって通知したキーパスは外す（Observation の購読は 1 回通知されると外れ、読み直したときに
   // 登録し直されるため）。外さないと、`\.items[id: id]` のように値ごとに異なるキーパスが溜まり続ける。
+  // 値が変わらないまま読まれなくなったキーパスは、一定の間隔で外す（`sweepUnreadKeyPaths()`）。
   private var trackedKeyPaths: [AnyKeyPath: TrackedKeyPath] = [:]
+  // 読まれなくなったキーパスを外す処理の回数と、前回からの更新の回数。
+  private var sweepCount = 0
+  private var updatesSinceSweep = 0
   // TrackedState の中で読まれたキーパス（State から）ごとの、値が変わったかを判定する関数。
   // 読み取りは TrackedState の値のコピーから行われ、メインアクター外で起き得るため、ロックで守る。
   private let nestedKeyPaths = Locked<[SendableKeyPath: @Sendable (State, State) -> Bool]>([:])
@@ -233,6 +237,25 @@ public final class Store<State: Sendable, Action: Sendable>: Observable {
     for tracked in changed { tracked.didSet(self) }
     for keyPath in nestedChanged { registrar.didSet(self, keyPath: keyPath) }
     notifyChildren(of: newState)
+    sweepUnreadKeyPathsIfNeeded()
+  }
+
+  /// 前回の掃除から一度も読まれていないキーパスを、通知してから追跡の表から外す。
+  ///
+  /// 値が変わらないキーパス（削除済みの要素を読んだ `nil` など）は、変化の通知で外れないため溜まり続ける。
+  /// 購読がまだ残っているかは Observation から分からないので、外すときに通知する。まだ読んでいる側は
+  /// 読み直し、その読み取りで登録し直される。読んでいない側の購読は、この通知で消える。
+  /// 間隔を表の大きさに比例させるのは、掃除の手間と、読み直しの回数を、更新 1 回あたりで一定に抑えるため。
+  private func sweepUnreadKeyPathsIfNeeded() {
+    updatesSinceSweep += 1
+    guard updatesSinceSweep >= max(256, trackedKeyPaths.count) else { return }
+    updatesSinceSweep = 0
+    let unread = trackedKeyPaths.filter { $0.value.lastSweepRead < sweepCount }
+    sweepCount += 1
+    guard !unread.isEmpty else { return }
+    for key in unread.keys { trackedKeyPaths[key] = nil }
+    for tracked in unread.values { tracked.willSet(self) }
+    for tracked in unread.values { tracked.didSet(self) }
   }
 
   /// scope で作った子の Store に、新しい State を知らせる。
@@ -251,6 +274,9 @@ public final class Store<State: Sendable, Action: Sendable>: Observable {
     for keyPath: KeyPath<State, Value> & Sendable
   ) -> TrackedKeyPath {
     if let tracked = trackedKeyPaths[keyPath] {
+      if tracked.lastSweepRead != sweepCount {
+        trackedKeyPaths[keyPath]?.lastSweepRead = sweepCount
+      }
       return tracked
     }
     // ObservationRegistrar は通知の単位を Store 上のキーパスで区別するため、
@@ -260,7 +286,8 @@ public final class Store<State: Sendable, Action: Sendable>: Observable {
       hasChanged: { $0[keyPath: keyPath] != $1[keyPath: keyPath] },
       access: { $0.registrar.access($0, keyPath: storeKeyPath) },
       willSet: { $0.registrar.willSet($0, keyPath: storeKeyPath) },
-      didSet: { $0.registrar.didSet($0, keyPath: storeKeyPath) }
+      didSet: { $0.registrar.didSet($0, keyPath: storeKeyPath) },
+      lastSweepRead: sweepCount
     )
     trackedKeyPaths[keyPath] = tracked
     return tracked
@@ -301,5 +328,7 @@ public final class Store<State: Sendable, Action: Sendable>: Observable {
     let access: (Store) -> Void
     let willSet: (Store) -> Void
     let didSet: (Store) -> Void
+    /// 最後に読まれたときの掃除の回数（`sweepCount`）。
+    var lastSweepRead: Int
   }
 }
