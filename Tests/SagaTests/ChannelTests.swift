@@ -167,10 +167,12 @@ private func makeTester(_ saga: Saga<Int, Action>) -> SagaTester<Int, Action> {
     try await tester.finish()
   }
 
-  @Test func eventChannelReadsAnAsyncSequence() async throws {
+  @Test(.timeLimit(.minutes(1))) func eventChannelReadsAnAsyncSequence() async throws {
+    let (completion, completed) = AsyncStream.makeStream(of: Void.self)
     let (stream, continuation) = AsyncStream.makeStream(of: String.self)
     let tester = makeTester(
       Saga { ctx in
+        defer { completed.finish() }
         for try await event in ctx.eventChannel(from: stream) {
           await ctx.put(.event(event))
         }
@@ -178,9 +180,12 @@ private func makeTester(_ saga: Saga<Int, Action>) -> SagaTester<Int, Action> {
       })
     continuation.yield("x")
     continuation.finish()
-    // シーケンスの読み取りは settle の対象外。届かなかった場合もテストを失敗として終えられるようにする。
-    try await tester.receive(.event("x"), timeout: .seconds(5))
-    try await tester.receive(.closed, timeout: .seconds(5))
+    // 外部シーケンスの読み取りは settle の対象外なので、本体の完了通知を待つ。
+    // CI の実行待ちを 5 秒の失敗条件にせず、停止の検出はテスト全体の時間上限に任せる。
+    for await _ in completion {}
+    try Task.checkCancellation()
+    try tester.receive(.event("x"))
+    try tester.receive(.closed)
     try await tester.finish()
   }
 }
@@ -223,10 +228,13 @@ private struct Disconnected: Error {}
     try await tester.finish()
   }
 
-  @Test func anAsyncSequenceThatEndsWithAnErrorThrowsItAfterTheBufferedValues() async throws {
+  @Test(.timeLimit(.minutes(1)))
+  func anAsyncSequenceThatEndsWithAnErrorThrowsItAfterTheBufferedValues() async throws {
+    let (completion, completed) = AsyncStream.makeStream(of: Void.self)
     let (stream, continuation) = AsyncThrowingStream.makeStream(of: String.self)
     let tester = makeTester(
       Saga { ctx in
+        defer { completed.finish() }
         do {
           for try await event in ctx.eventChannel(from: stream) {
             await ctx.put(.event(event))
@@ -238,16 +246,23 @@ private struct Disconnected: Error {}
       })
     continuation.yield("x")
     continuation.finish(throwing: Disconnected())
-    // シーケンスの読み取りは settle の対象外。届かなかった場合もテストを失敗として終えられるようにする。
-    try await tester.receive(.event("x"), timeout: .seconds(5))
-    try await tester.receive(.event("disconnected"), timeout: .seconds(5))
+    // 外部シーケンスの読み取りは settle の対象外なので、本体の完了通知を待つ。
+    // CI の実行待ちを 5 秒の失敗条件にせず、停止の検出はテスト全体の時間上限に任せる。
+    for await _ in completion {}
+    try Task.checkCancellation()
+    try tester.receive(.event("x"))
+    try tester.receive(.event("disconnected"))
     try await tester.finish()
   }
 
-  @Test func anAsyncSequenceThatEndsWithCancellationErrorEndsTheChannel() async throws {
+  @Test(.timeLimit(.minutes(1))) func anAsyncSequenceThatEndsWithCancellationErrorEndsTheChannel()
+    async throws
+  {
+    let (completion, completed) = AsyncStream.makeStream(of: Void.self)
     let (stream, continuation) = AsyncThrowingStream.makeStream(of: String.self)
     let tester = makeTester(
       Saga { ctx in
+        defer { completed.finish() }
         do {
           for try await event in ctx.eventChannel(from: stream) {
             await ctx.put(.event(event))
@@ -259,9 +274,12 @@ private struct Disconnected: Error {}
       })
     continuation.yield("x")
     continuation.finish(throwing: CancellationError())
-    // シーケンスの読み取りは Saga ではないので settle の対象外。届くまで待つ。
-    try await tester.receive(.event("x"), timeout: .seconds(5))
-    try await tester.receive(.closed, timeout: .seconds(5))
+    // 外部シーケンスの読み取りは settle の対象外なので、本体の完了通知を待つ。
+    // CI の実行待ちを 5 秒の失敗条件にせず、停止の検出はテスト全体の時間上限に任せる。
+    for await _ in completion {}
+    try Task.checkCancellation()
+    try tester.receive(.event("x"))
+    try tester.receive(.closed)
     try await tester.finish()
   }
 
