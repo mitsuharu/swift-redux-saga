@@ -125,3 +125,12 @@
 | 12-10 | `feature/testing-overlapping-requests` | テストで待たずに送る `dispatch` と、届くまで待つ `receive(_:timeout:)` （[#62](https://github.com/mitsuharu/swift-redux-saga/pull/62)） |
 | 12-11 | `feature/saga-scope` | 子の Saga を子の型のまま親に接続する （[#63](https://github.com/mitsuharu/swift-redux-saga/pull/63)） |
 | 12-12 | `feature/example-auth` | Example をログインと ToDo の 2 機能の構成に、Saga の寿命のガイド （[#64](https://github.com/mitsuharu/swift-redux-saga/pull/64)） |
+| 12-13 | `docs/consistency-review` | ドキュメントの食い違いの修正、default MainActor isolation の書き方 （[#65](https://github.com/mitsuharu/swift-redux-saga/pull/65)） |
+| 12-14 | `fix/test-clock-delay-race` | `TestClock` で `delay` する Saga がまれに起こされない競合 （[#66](https://github.com/mitsuharu/swift-redux-saga/pull/66)） |
+| 12-15 | `feature/store-scope` | State と Action の一部だけを扱う Store（`Store.scope`） （[#67](https://github.com/mitsuharu/swift-redux-saga/pull/67)） |
+| 12-16 | `refactor/remove-waste` | ムダの整理（重複した関数、Example の組み立て、CI、CHANGELOG） （[#68](https://github.com/mitsuharu/swift-redux-saga/pull/68)） |
+| 12-17 | `fix/store-scope-reentrancy` | 子 Store の通知中の `scope` で停止する問題、通知したキーパスを追跡の表から外す （[#69](https://github.com/mitsuharu/swift-redux-saga/pull/69)） |
+| 12-18 | `refactor/saga-scope-single-runtime` | Saga の scope を、ランタイムを分けずに型だけ付け替える方式にする （[#70](https://github.com/mitsuharu/swift-redux-saga/pull/70)） |
+| 12-19 | `fix/example-stale-results` | Example で、ログアウト前や読み込み中の古い結果が State に入らない （[#71](https://github.com/mitsuharu/swift-redux-saga/pull/71)） |
+| 12-20 | `fix/event-channel-cancellation` | `eventChannel` の入力が `CancellationError` で終わってもチャネルを閉じる （[#72](https://github.com/mitsuharu/swift-redux-saga/pull/72)） |
+| 12-21 | `ci/minimum-swift` | 最低対応の Swift 6.2 でも Linux でビルドとテスト （[#73](https://github.com/mitsuharu/swift-redux-saga/pull/73)） |
