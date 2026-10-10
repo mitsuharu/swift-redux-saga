@@ -843,7 +843,7 @@ extension ActionPattern where Value == Action, Action: Equatable {
 | `takeLeading` | `func takeLeading<V>(_ p, _ worker) -> SagaTask` | 実行中に届いた Action は捨てる |
 | `debounce` | `func debounce<V>(_ d: Duration, _ p, _ worker) -> SagaTask` | 静かな期間の後に最後の Action で起動。起動したワーカーは後の Action でキャンセルしない |
 | `throttle` | `func throttle<V>(_ d: Duration, _ p, _ worker) -> SagaTask` | 起動後 `d` の間は最新の 1 件だけ残し、`d` の後に処理する |
-| `all` | `func all<each R>(_ ops: repeat @Sendable (SagaContext) async throws -> each R) async throws -> (repeat each R)` | 各処理は fork した子で、自分の ctx を受け取る。1 つでも失敗したら他をキャンセルし、エラーは呼び出し元で catch できる（処理の中で fork した子の失敗も含む） |
+| `all` | `func all<each R>(_ ops: repeat @Sendable (SagaContext) async throws -> each R) async throws -> (repeat each R)` | 各処理は fork した子で、自分の ctx を受け取る。1 つでも失敗したら他をキャンセルし、エラーは呼び出し元で catch できる（処理の中で fork した子の失敗も含む）。1 つでもキャンセルで終わったら、他をキャンセルして `CancellationError` を投げる |
 | `race` | `func race<each R>(_ ops: repeat @Sendable (SagaContext) async throws -> each R) async throws -> (repeat (each R)?)` | 最初に終わったもの以外はキャンセル。戻り値は勝者のみ非 nil。勝者が失敗したらそのエラー、キャンセルで終わったら `CancellationError` を投げる |
 | `actionChannel` | `func actionChannel<V>(_ p, buffer: ChannelBuffer = .unbounded) -> SagaChannel<V>` | 作った時点から溜める。作った Saga が終わると閉じる |
 | `eventChannel` | `func eventChannel<V>(buffer:, _ subscribe: (emit, EventChannelFinish) -> unsubscribe) -> SagaChannel<V>` / `func eventChannel(buffer:, from: some AsyncSequence)` | 閉じると unsubscribe を呼ぶ。作った Saga が終わると閉じる。イベント源がエラーで終わる（`finish(throwing:)`、シーケンスのエラー）と、溜まった値の後に受け取り側でそのエラーを投げる |

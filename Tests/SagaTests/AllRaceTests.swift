@@ -179,6 +179,26 @@ private let response = ActionPattern<Action, String>.case {
     try await tester.finish()
   }
 
+  @Test func allThrowsCancellationAndCancelsTheOthersWhenAnOperationEndsByCancellation()
+    async throws
+  {
+    let tester = makeTester(
+      Saga { ctx in
+        do {
+          let _: (Void, String) = try await ctx.all(
+            { _ in throw CancellationError() },
+            { ctx in try await ctx.take(response) }
+          )
+          await ctx.put(.result("completed"))
+        } catch is CancellationError {
+          await ctx.put(.result("cancelled"))
+        }
+      })
+    await tester.settle()
+    try tester.receive(.result("cancelled"))
+    try await tester.finish()
+  }
+
   @Test func cancellingTheCallerCancelsEveryOperation() async throws {
     let clock = TestClock()
     let tester = makeTester(
