@@ -157,3 +157,9 @@
 | 13-8 | `docs/hooks-store-resolution` | 入れ子の Store でフックが使う先の決まり方、識別子で Store を指定する `.store(_:id:)` （[#98](https://github.com/mitsuharu/swift-redux-saga/pull/98)） |
 | 13-9 | `docs/select-state-recompute` | セレクタの再計算のコストと、メモ化したセレクタの使い方 （[#99](https://github.com/mitsuharu/swift-redux-saga/pull/99)） |
 | 13-10 | `docs/release-0.2.0` | 0.2.0 のリリース（CHANGELOG、README のインストール手順） |
+
+## M14: 0.2.0 以降
+
+| # | ブランチ | 内容 |
+| --- | --- | --- |
+| 14-1 | `docs/persistence-guide` | State の永続化の使い方の解説（docs/persistence.md） |
