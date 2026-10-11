@@ -1,4 +1,5 @@
 #if canImport(SwiftUI) && (os(macOS) || os(iOS))
+  import InternalPrimitives
   import Redux
   import ReduxSwiftUI
   import SwiftUI
@@ -51,6 +52,25 @@
     }
   }
 
+  /// メモ化したセレクタ（createSelector）を、View の評価のたびに作り直さずに渡す。
+  private struct DoubledView: View {
+    let probe: Probe
+    @SelectState<CounterState, Int> private var doubled: Int
+
+    init(selector: Redux.Selector<CounterState, Int>, probe: Probe) {
+      self.probe = probe
+      _doubled = SelectState { state in
+        probe.selections += 1
+        return selector(state)
+      }
+    }
+
+    var body: some View {
+      let _ = probe.rendered.append(doubled)
+      Text("\(doubled)")
+    }
+  }
+
   @MainActor
   @Suite struct StoreHooksViewTests {
     @Test func aViewShowsTheSelectedValueAndFollowsItsChanges() async {
@@ -78,6 +98,35 @@
       // 読んでいる値の変化では再描画される。
       store.dispatch(.increment)
       #expect(await host.waitUntil { probe.rendered.last == 2 })
+    }
+
+    @Test func aMemoizedSelectorDoesNotRecomputeForChangesToOtherInputs() async {
+      let store = Store(initialState: CounterState(), reducer: reducer)
+      let probe = Probe()
+      let resultCalls = Locked(0)
+      let doubled = createSelector(\CounterState.count) { count in
+        resultCalls.withLock { $0 += 1 }
+        return count * 2
+      }
+      let host = Host(DoubledView(selector: doubled, probe: probe).store(store))
+      // 購読が始まっていることを確かめる。
+      store.dispatch(.increment)
+      #expect(await host.waitUntil { probe.rendered.last == 2 })
+      let callsBefore = resultCalls.withLock { $0 }
+      let renderedBefore = probe.rendered.count
+      // 入力（count）以外の変化。@SelectState のセレクタは呼ばれるが、結果の計算は前回の結果で済む。
+      for _ in 0..<3 {
+        let selectionsBefore = probe.selections
+        store.dispatch(.touchOther)
+        #expect(await host.waitUntil { probe.selections > selectionsBefore })
+      }
+      host.layout()
+      #expect(resultCalls.withLock { $0 } == callsBefore)
+      #expect(probe.rendered.count == renderedBefore)
+      // 入力が変わったときは計算し直す。
+      store.dispatch(.increment)
+      #expect(await host.waitUntil { probe.rendered.last == 4 })
+      #expect(resultCalls.withLock { $0 } == callsBefore + 1)
     }
 
     @Test func removingTheViewReleasesItsSubscriptionAndStopsReadingTheStore() async {
