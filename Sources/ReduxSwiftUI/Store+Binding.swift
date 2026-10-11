@@ -86,9 +86,13 @@
     ///   @Environment(Store<AppState, AppAction>.self) private var store
     /// }
     /// ```
+    ///
+    /// 子の View では、`@SelectState` / `@DispatchAction` で、Action や State の型を書かずに読み書きすることもできます。
     public func store<State: Sendable, Action: Sendable>(_ store: Store<State, Action>) -> some View
     {
       environment(store)
+        .environment(StoreSource(store))
+        .environment(ActionSink(store))
     }
   }
 #endif

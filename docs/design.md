@@ -1049,6 +1049,26 @@ extension View {
 }
 ```
 
+React Redux の `useSelector` / `useDispatch` に当たるプロパティラッパーも用意する。SwiftUI で hook の役割を担うのは `DynamicProperty` なので、マクロではなくプロパティラッパーで作る。
+
+```swift
+@propertyWrapper public struct SelectState<State, Value: Equatable>: DynamicProperty {
+  public init(_ keyPath: KeyPath<State, Value> & Sendable)
+  public init(_ selector: Selector<State, Value>)
+  public init(_ select: @escaping @MainActor (State) -> Value)
+  public var wrappedValue: Value { get }
+}
+@propertyWrapper public struct DispatchAction<Action>: DynamicProperty {
+  public init()
+  public var wrappedValue: (Action) -> Void { get }
+}
+```
+
+- `.store(_:)` は、Store に加えて、Action の型を消した読み取り口（State だけを型に持つ）と、State の型を消した送り口（Action だけを型に持つ）を Environment に入れる。`@SelectState(\AppState.count)` のように、片方の型だけで宣言できるようにするため。
+- `@SelectState` は、Store の変化のたびに値を読み直し、変わったときだけ自分の値（Observable）を書き換える。View が読むのはこの値なので、計算した値（セレクタ）でも、結果が変わったときだけ再描画される。Store を直接読む書き方（`store.count`）はプロパティ単位で追跡されるが、セレクタは State 全体を読むため、関係ない変更でも再描画される。この差を埋める。
+- 同じ Store なら購読し直さない（`update()` は `body` の評価のたびに呼ばれるため）。
+- 型をメインアクターに隔離しないのは、`DynamicProperty` の `update()` が隔離されていない要求で、隔離した型では準拠できないため。`update()` と値の読み取りは、View の評価中にメインアクター上で呼ばれる。
+
 ### UIKit（`ReduxUIKit`）
 
 - iOS 26 以降（および `UIObservationTrackingEnabled` を有効にした iOS 18 以降）は、`viewWillLayoutSubviews()` / `layoutSubviews()` / `updateProperties()` などで `store.count` を読むだけで UIKit が自動で追跡する。ライブラリ側の追加作業はない（5.4 の追跡単位がそのまま効く）。

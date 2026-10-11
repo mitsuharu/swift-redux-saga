@@ -419,6 +419,21 @@ struct CounterView: View {
 // 親で .store(store) を付ける。
 ```
 
+React Redux の `useSelector` / `useDispatch` のように、Store の型を書かずに、読む値と Action を送る関数だけを宣言することもできます（親で `.store(store)` を付けておく）。`@SelectState` は、読んだ値が変わったときだけ View を再描画します。`createSelector` で作ったセレクタを渡した場合も、計算結果が変わったときだけ再描画されます。
+
+```swift
+struct LoginView: View {
+  @SelectState(\AppState.auth.isLoggingIn) private var isLoggingIn
+  @SelectState(TodoFeature.visibleTodos) private var todos   // セレクタ
+  @DispatchAction private var dispatch: (AppAction) -> Void
+
+  var body: some View {
+    Button("Log in") { dispatch(.auth(.loginTapped)) }
+      .disabled(isLoggingIn)
+  }
+}
+```
+
 `TextField` や `Toggle` など、値を書き戻すだけの入力欄は、State のプロパティに `@BindableState` を付け、Action に `case binding(BindingAction<State>)` を用意すると、部品ごとに Action を書かずに済みます。
 
 ```swift
