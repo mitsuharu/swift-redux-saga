@@ -88,6 +88,9 @@
     /// ```
     ///
     /// 子の View では、`@SelectState` / `@DispatchAction` で、Action や State の型を書かずに読み書きすることもできます。
+    ///
+    /// 入れ子にした場合、`@Environment(Store<State, Action>.self)` は両方の型、`@SelectState` は State の型、
+    /// `@DispatchAction` は Action の型が一致する Store のうち、最も近いものを使います。
     public func store<State: Sendable, Action: Sendable>(_ store: Store<State, Action>) -> some View
     {
       environment(store)

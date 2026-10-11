@@ -1065,6 +1065,7 @@ React Redux の `useSelector` / `useDispatch` に当たるプロパティラッ�
 ```
 
 - `.store(_:)` は、Store に加えて、Action の型を消した読み取り口（State だけを型に持つ）と、State の型を消した送り口（Action だけを型に持つ）を Environment に入れる。`@SelectState(\AppState.count)` のように、片方の型だけで宣言できるようにするため。
+- 読み取り口と送り口は型ごとに別々に Environment に入るので、入れ子にした `.store(_:)` では、それぞれ型が一致する最も近いものが使われる。State の型だけ、または Action の型だけが同じ Store を入れ子にすると、`@SelectState` と `@DispatchAction` が別の Store を指すことがある。これは README とドキュメントコメントで説明し、テストで保証する。同じ完全型の Store を区別する識別子付きの API は、必要になるまで設けない。
 - `@SelectState` は、Store の変化のたびに値を読み直し、変わったときだけ自分の値（Observable）を書き換える。View が読むのはこの値なので、計算した値（セレクタ）でも、結果が変わったときだけ再描画される。Store を直接読む書き方（`store.count`）はプロパティ単位で追跡されるが、セレクタは State 全体を読むため、関係ない変更でも再描画される。この差を埋める。
 - `update()`（`body` の評価のたびに呼ばれる）では、セレクタを差し替えて今の値を読み直す。SwiftUI が View の状態を保ったまま表示する対象（ID など）を変えた場合に、新しいセレクタを反映するため。クロージャは比較できないので、変わったかどうかは判定しない。
 - 購読は Store が変わったときだけし直す（Environment の Store を差し替えると、古い Store の購読をやめる）。購読の通知では、その時点のセレクタで読み直す。

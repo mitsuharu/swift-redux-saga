@@ -436,6 +436,20 @@ struct LoginView: View {
 
 `@SelectState` / `@DispatchAction` は SwiftUI の View の中だけで使えます（SwiftUI が View を評価するときに、Environment から Store を取り出すため）。ViewModel（MVVM）や UIKit では使えないので、Store を持たせて `store.isLoading` のように読み、`store.dispatch(...)` で送ってください（[Store を直接使うか、MVVM を経由するか](#store-を直接使うかmvvm-を経由するか)）。
 
+`.store(_:)` を入れ子にして複数の Store を置いた場合、`@SelectState` は State の型が一致する Store のうち、最も近い（内側の）ものを読みます。`@DispatchAction` は Action の型が一致する Store のうち、最も近いものに送ります。2 つは別々に探されるので、同じ View の中でも、読む Store と送る Store が異なることがあります。
+
+```swift
+RootView()
+  .store(childStore)   // Store<ChildState, AppAction>
+  .store(appStore)     // Store<AppState, AppAction>
+
+// RootView の中で
+@SelectState(\AppState.user) private var user        // AppState の Store は appStore だけなので、appStore を読む
+@DispatchAction private var dispatch: (AppAction) -> Void  // AppAction は childStore が上書きしているので、childStore に送る
+```
+
+`store.scope(...)` で作った子の Store を内側に置く場合も同じです。読む先と送る先をそろえたいときは、State と Action の両方の型が異なる Store を入れ子にするか、`@Environment(Store<State, Action>.self)` で Store そのものを取り出してください（こちらは State と Action の両方の型が一致する、最も近い Store です）。同じ型の Store を入れ子にした場合は、どの書き方でも内側の Store を使います。外側の Store を使いたい View は、内側の `.store(_:)` の外に置いてください。
+
 `TextField` や `Toggle` など、値を書き戻すだけの入力欄は、State のプロパティに `@BindableState` を付け、Action に `case binding(BindingAction<State>)` を用意すると、部品ごとに Action を書かずに済みます。
 
 ```swift

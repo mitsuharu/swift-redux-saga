@@ -19,6 +19,9 @@
   ///
   /// `store.isLoading` のように Store を直接読む書き方と違い、計算した値（セレクタ）でも、
   /// 計算結果が変わったときだけ再描画されます。
+  ///
+  /// `.store(_:)` を入れ子にした場合は、State の型が一致する Store のうち、最も近い（内側の）ものを読みます。
+  /// ``DispatchAction`` は Action の型で別に探すので、両者が同じ Store を指すとは限りません。
   // メインアクターに隔離しないのは、DynamicProperty の update() が隔離されていない要求で、
   // 隔離した型では準拠できないため。update() と値の読み取りはメインアクター上で呼ばれる（View の評価中）。
   @propertyWrapper
@@ -63,6 +66,8 @@
   }
 
   /// Environment の Store に Action を送る関数を取り出すプロパティラッパー（React Redux の `useDispatch` 相当）。
+  ///
+  /// `.store(_:)` を入れ子にした場合は、Action の型が一致する Store のうち、最も近い（内側の）ものに送ります。
   ///
   /// ```swift
   /// struct LoginView: View {
