@@ -466,6 +466,34 @@ RootView()
 @DispatchAction(store: .app) private var dispatch: (AppAction) -> Void  // 読む先と同じ appStore に送る
 ```
 
+再描画を抑えることと、計算を省くことは別です。`@SelectState` に渡したセレクタは、State のどこかが変わるたびと、View が評価されるたびに呼ばれます。結果が前回と同じなら再描画はしませんが、セレクタの計算そのものは毎回行われます。一覧の行ごとに検索や集計のような重い処理を渡すと、再描画は少なくても計算が増えます。
+
+重い処理は `createSelector` で、入力を必要な値に絞って作ります。結果の計算は、入力が変わったときだけ行われます。セレクタは `static let` などで一度だけ作ってください。View の `init` や `body` の中で作ると、評価のたびにキャッシュが捨てられます。
+
+`createSelector` のキャッシュは直近の 1 件だけです。行ごとに異なる ID で 1 つのセレクタを使うと、入力が交互に変わるので、毎回計算し直すことになります。行ごとの値は、全体を一度だけ計算するセレクタ（ID から引ける辞書など）を作っておき、行ではそこから取り出すだけにします。
+
+```swift
+enum TodoFeature {
+  // 入力は todos と filter だけ。ほかの State が変わっても、結果の計算はし直さない。
+  static let visibleTodos = createSelector(\AppState.todos, \.filter) { todos, filter in
+    todos.filter(filter.matches)
+  }
+  // 行ごとの値は、全体を一度だけ計算しておく。
+  static let summaries = createSelector(\AppState.todos) { todos in
+    Dictionary(uniqueKeysWithValues: todos.map { ($0.id, TodoSummary($0)) })
+  }
+}
+
+struct TodoRow: View {
+  @SelectState<AppState, TodoSummary?> private var summary: TodoSummary?
+
+  init(id: Todo.ID) {
+    // 行で行うのは、辞書から取り出すことだけ。
+    _summary = SelectState { TodoFeature.summaries($0)[id] }
+  }
+}
+```
+
 `TextField` や `Toggle` など、値を書き戻すだけの入力欄は、State のプロパティに `@BindableState` を付け、Action に `case binding(BindingAction<State>)` を用意すると、部品ごとに Action を書かずに済みます。
 
 ```swift

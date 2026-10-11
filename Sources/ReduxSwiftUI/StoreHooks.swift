@@ -23,6 +23,9 @@
   /// `.store(_:)` を入れ子にした場合は、State の型が一致する Store のうち、最も近い（内側の）ものを読みます。
   /// ``DispatchAction`` は Action の型で別に探すので、両者が同じ Store を指すとは限りません。
   /// 使う Store を明示したいときは、``SwiftUI/View/store(_:id:)`` で付けた識別子を `store:` で渡します。
+  ///
+  /// 再描画は結果が変わったときだけですが、セレクタは State が変わるたびと View の評価のたびに呼ばれます。
+  /// 重い計算は、入力を絞った `createSelector` のセレクタを `static let` などで一度だけ作って渡してください。
   // メインアクターに隔離しないのは、DynamicProperty の update() が隔離されていない要求で、
   // 隔離した型では準拠できないため。update() と値の読み取りはメインアクター上で呼ばれる（View の評価中）。
   @propertyWrapper
