@@ -64,6 +64,8 @@
       private let view: NSHostingView<AnyView>
     #else
       private let controller: UIHostingController<AnyView>
+      // UIKit は、ウインドウに入っていない View を描画しない（body も評価されない）ため、ウインドウに置く。
+      private let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 200, height: 100))
     #endif
 
     init(_ content: some View) {
@@ -72,7 +74,8 @@
         view.frame = CGRect(x: 0, y: 0, width: 200, height: 100)
       #else
         controller = UIHostingController(rootView: AnyView(content))
-        controller.view.frame = CGRect(x: 0, y: 0, width: 200, height: 100)
+        window.rootViewController = controller
+        window.isHidden = false
       #endif
       layout()
     }
