@@ -1066,7 +1066,9 @@ React Redux の `useSelector` / `useDispatch` に当たるプロパティラッ�
 
 - `.store(_:)` は、Store に加えて、Action の型を消した読み取り口（State だけを型に持つ）と、State の型を消した送り口（Action だけを型に持つ）を Environment に入れる。`@SelectState(\AppState.count)` のように、片方の型だけで宣言できるようにするため。
 - `@SelectState` は、Store の変化のたびに値を読み直し、変わったときだけ自分の値（Observable）を書き換える。View が読むのはこの値なので、計算した値（セレクタ）でも、結果が変わったときだけ再描画される。Store を直接読む書き方（`store.count`）はプロパティ単位で追跡されるが、セレクタは State 全体を読むため、関係ない変更でも再描画される。この差を埋める。
-- 同じ Store なら購読し直さない（`update()` は `body` の評価のたびに呼ばれるため）。
+- `update()`（`body` の評価のたびに呼ばれる）では、セレクタを差し替えて今の値を読み直す。SwiftUI が View の状態を保ったまま表示する対象（ID など）を変えた場合に、新しいセレクタを反映するため。クロージャは比較できないので、変わったかどうかは判定しない。
+- 購読は Store が変わったときだけし直す（Environment の Store を差し替えると、古い Store の購読をやめる）。購読の通知では、その時点のセレクタで読み直す。
+- `update()` の中では、State を追跡に登録せずに読み、購読も `update()` の外（メインアクターのタスク）で始める。Observation は入れ子の追跡で読んだ値も外側の追跡に含めるため、View の評価中に State を追跡すると、View が State 全体の変化で再描画されるようになるため。
 - 型をメインアクターに隔離しないのは、`DynamicProperty` の `update()` が隔離されていない要求で、隔離した型では準拠できないため。`update()` と値の読み取りは、View の評価中にメインアクター上で呼ばれる。
 
 ### UIKit（`ReduxUIKit`）

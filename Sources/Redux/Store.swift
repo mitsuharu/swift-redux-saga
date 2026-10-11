@@ -165,8 +165,8 @@ public final class Store<State: Sendable, Action: Sendable>: Observable {
     self.forward = forward
   }
 
-  /// Observation の追跡に登録せずに State を読む（ミドルウェア用）。
-  var untrackedState: State {
+  /// Observation の追跡に登録せずに State を読む（ミドルウェアと、SwiftUI の `SelectState` 用）。
+  package var untrackedState: State {
     currentState
   }
 

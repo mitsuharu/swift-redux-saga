@@ -96,14 +96,18 @@
   @Observable
   final class StoreSource<State: Sendable> {
     let id: ObjectIdentifier
-    @ObservationIgnored let observe: (@escaping @MainActor (State) -> Void) -> ObservationToken
+    @ObservationIgnored let observe: (@escaping @MainActor () -> Void) -> ObservationToken
+    @ObservationIgnored let currentState: () -> State?
 
     init<Action>(_ store: Store<State, Action>) {
       id = ObjectIdentifier(store)
       observe = { [weak store] handler in
         guard let store else { return ObservationToken.observe({}, onChange: { _ in }) }
-        return store.observe({ $0.state }, onChange: handler)
+        return store.observe({ $0.state }, onChange: { _ in handler() })
       }
+      // 追跡に登録せずに読む。View の評価中（update()）に読むので、追跡すると View が State 全体の変化で
+      // 再描画されるようになり、セレクタの結果で再描画を絞れなくなるため。
+      currentState = { [weak store] in store?.untrackedState }
     }
   }
 
@@ -126,21 +130,39 @@
     private(set) var value: Value?
     @ObservationIgnored private var sourceID: ObjectIdentifier?
     @ObservationIgnored private var token: ObservationToken?
+    // 今の Store とセレクタで値を読み直す関数。connect のたびに差し替える。
+    @ObservationIgnored private var reselect: (@MainActor () -> Value?)?
 
     // SelectState の @State の初期値として、隔離されていない文脈で作るため。
     nonisolated init() {}
 
+    /// Store とセレクタを設定し、今の値を読み直す。`update()` から、View の評価のたびに呼ばれる。
     func connect<State>(
       to source: StoreSource<State>, select: @escaping @MainActor (State) -> Value
     ) {
-      // 同じ Store なら購読し直さない（update は body の評価のたびに呼ばれるため）。
+      // セレクタは毎回差し替えて読み直す。SwiftUI が View の状態を保ったまま、表示する対象（ID など）を
+      // 変えた場合に、新しいセレクタを反映するため（クロージャは比較できないので、変わったかを判定しない）。
+      reselect = { source.currentState().map(select) }
+      refresh()
+      // 購読は Store が変わったときだけし直す。購読の通知では、その時点のセレクタで読み直す。
       guard sourceID != source.id else { return }
       sourceID = source.id
-      token = source.observe { [weak self] state in
-        let newValue = select(state)
-        // 変わったときだけ書き換える。書き換えないかぎり、この値を読む View は再描画されない。
-        if self?.value != newValue { self?.value = newValue }
+      token?.cancel()
+      token = nil
+      // 購読は View の評価（update()）の外で始める。Observation は入れ子の追跡で読んだ値も外側の追跡に
+      // 含めるため、View の評価中に購読を始めると、View が State 全体を追跡し、関係のない変更でも
+      // 再描画されるようになる。間に起きた変更は、購読を始めた時点の読み直しで反映される。
+      let id = source.id
+      Task { @MainActor [weak self] in
+        guard let self, sourceID == id, token == nil else { return }
+        token = source.observe { [weak self] in self?.refresh() }
       }
+    }
+
+    private func refresh() {
+      guard let newValue = reselect?() else { return }
+      // 変わったときだけ書き換える。書き換えないかぎり、この値を読む View は再描画されない。
+      if value != newValue { value = newValue }
     }
   }
 #endif
