@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### 追加
+
+- SwiftUI で、Store の型を書かずに値を読む `@SelectState` と、Action を送る `@DispatchAction`（React Redux の `useSelector` / `useDispatch` に当たる、`ReduxSwiftUI`）。`@SelectState` は読んだ値（セレクタの計算結果を含む）が変わったときだけ再描画する
+
 ## [0.1.0] - 2026-10-11
 
 最初のリリースです。
