@@ -1,10 +1,16 @@
 import AppFeature
 import Redux
+import ReduxSwiftUI
 import SwiftUI
 
 /// ログイン画面。Store を直接使う（入力中の名前は画面特有の状態なので、View の @State に持つ）。
+///
+/// `@SelectState` / `@DispatchAction` で、State から読む値と Action を送る関数だけを宣言する
+/// （React Redux の useSelector / useDispatch に当たる書き方）。
 struct LoginView: View {
-  @Environment(Store<RootFeature.State, RootFeature.Action>.self) private var store
+  @SelectState(\RootFeature.State.auth.isLoggingIn) private var isLoggingIn
+  @SelectState(\RootFeature.State.auth.errorMessage) private var errorMessage
+  @DispatchAction private var dispatch: (RootFeature.Action) -> Void
   @State private var name = ""
 
   var body: some View {
@@ -14,14 +20,14 @@ struct LoginView: View {
           .onSubmit(login)
           .accessibilityIdentifier("nameField")
         Button("Log in", action: login)
-          .disabled(store.auth.isLoggingIn)
+          .disabled(isLoggingIn)
           .accessibilityIdentifier("loginButton")
-        if let message = store.auth.errorMessage {
-          Text(message).foregroundStyle(.red)
+        if let errorMessage {
+          Text(errorMessage).foregroundStyle(.red)
         }
       }
       .overlay {
-        if store.auth.isLoggingIn {
+        if isLoggingIn {
           ProgressView()
         }
       }
@@ -30,6 +36,6 @@ struct LoginView: View {
   }
 
   private func login() {
-    store.dispatch(.auth(.loginTapped(name: name)))
+    dispatch(.auth(.loginTapped(name: name)))
   }
 }
