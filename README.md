@@ -434,6 +434,8 @@ struct LoginView: View {
 }
 ```
 
+`@SelectState` / `@DispatchAction` は SwiftUI の View の中だけで使えます（SwiftUI が View を評価するときに、Environment から Store を取り出すため）。ViewModel（MVVM）や UIKit では使えないので、Store を持たせて `store.isLoading` のように読み、`store.dispatch(...)` で送ってください（[Store を直接使うか、MVVM を経由するか](#store-を直接使うかmvvm-を経由するか)）。
+
 `TextField` や `Toggle` など、値を書き戻すだけの入力欄は、State のプロパティに `@BindableState` を付け、Action に `case binding(BindingAction<State>)` を用意すると、部品ごとに Action を書かずに済みます。
 
 ```swift
