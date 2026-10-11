@@ -34,7 +34,7 @@
     public var description: String { rawValue }
   }
 
-  /// 識別子を付けて Environment に入れた、Store の読み取り口と送り口。
+  /// 識別子を付けて Environment に入れた Store と、その読み取り口と送り口。
   ///
   /// 識別子と型（`StoreSource<State>` / `ActionSink<Action>`）の組で引く。同じ組を内側で入れると、内側が使われる。
   struct NamedStores: Sendable {
@@ -43,12 +43,17 @@
       let type: ObjectIdentifier
     }
 
-    // 値は StoreSource / ActionSink（メインアクターに隔離されたクラスなので Sendable）。
+    // 値は Store / StoreSource / ActionSink（メインアクターに隔離されたクラスなので Sendable）。
     private var entries: [Key: any AnyObject & Sendable] = [:]
 
     mutating func register<State, Action>(
-      _ source: StoreSource<State>, _ sink: ActionSink<Action>, id: StoreID
+      _ store: Store<State, Action>, _ source: StoreSource<State>, _ sink: ActionSink<Action>,
+      id: StoreID
     ) {
+      // Store 本体も持つ。StoreSource / ActionSink は Store を弱参照で持つので、ここで持たないと、
+      // その場で作った Store（scope した子の Store など）が、View が表示されている間に解放されてしまう。
+      // 識別子なしの .store(_:) では、environment(store) が同じ役割を担っている。
+      entries[Key(id: id, type: ObjectIdentifier(Store<State, Action>.self))] = store
       entries[Key(id: id, type: ObjectIdentifier(StoreSource<State>.self))] = source
       entries[Key(id: id, type: ObjectIdentifier(ActionSink<Action>.self))] = sink
     }
@@ -85,7 +90,7 @@
       _ store: Store<State, Action>, id: StoreID
     ) -> some View {
       let (source, sink) = (StoreSource(store), ActionSink(store))
-      return transformEnvironment(\.namedStores) { $0.register(source, sink, id: id) }
+      return transformEnvironment(\.namedStores) { $0.register(store, source, sink, id: id) }
     }
   }
 #endif

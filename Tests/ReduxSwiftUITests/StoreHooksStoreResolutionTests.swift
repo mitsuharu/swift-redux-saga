@@ -189,6 +189,53 @@
       #expect(parent.state.count == 6)
       #expect(child.state.count == 105)
     }
+
+    @Test func aNamedStoreIsKeptWhileTheViewIsShownAndReleasedAfterwards() async {
+      let probe = Probe<SharedAction>()
+      weak var weakStore: Store<ParentState, SharedAction>?
+      let host: Host
+      do {
+        // View 以外に持ち主がいない Store。
+        let store = Store(initialState: ParentState(count: 7), reducer: parentReducer)
+        weakStore = store
+        host = Host(
+          HookView(\ParentState.count, store: .outer, probe: probe).store(store, id: .outer))
+      }
+      #expect(weakStore != nil)
+      #expect(probe.read == 7)
+      probe.dispatch?(.add(1))
+      #expect(await host.waitUntil { probe.read == 8 })
+      host.replace(with: EmptyView())
+      #expect(await host.waitUntil { weakStore == nil })
+    }
+
+    @Test func aScopedStoreCreatedInPlaceCanBeUsedWithAnID() async {
+      let parent = Store(initialState: ParentState(count: 1), reducer: parentReducer)
+      let probe = Probe<SharedAction>()
+      // scope した子の Store を、その場で作って渡す（ほかに持ち主はいない）。
+      let host = Host(
+        HookView(\ChildState.count, store: .outer, probe: probe)
+          .store(parent.scope(state: { ChildState(count: $0.count) }, action: { $0 }), id: .outer))
+      #expect(probe.read == 1)
+      probe.dispatch?(.add(5))
+      #expect(parent.state.count == 6)
+      #expect(await host.waitUntil { probe.read == 6 })
+    }
+
+    @Test func anUnnamedStoreIsKeptWhileTheViewIsShownAndReleasedAfterwards() async {
+      let probe = Probe<SharedAction>()
+      weak var weakStore: Store<ParentState, SharedAction>?
+      let host: Host
+      do {
+        let store = Store(initialState: ParentState(count: 7), reducer: parentReducer)
+        weakStore = store
+        host = Host(HookView(\ParentState.count, probe: probe).store(store))
+      }
+      #expect(weakStore != nil)
+      #expect(probe.read == 7)
+      host.replace(with: EmptyView())
+      #expect(await host.waitUntil { weakStore == nil })
+    }
   }
 
   /// フックと `@Environment(Store<State, Action>.self)` の両方で読む。
