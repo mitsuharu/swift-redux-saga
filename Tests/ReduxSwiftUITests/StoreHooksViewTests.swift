@@ -34,14 +34,18 @@
     var selections = 0
   }
 
+  /// セレクタが保持されている間だけ生きているもの。解放されたかを weak 参照で確かめる。
+  private final class Marker {}
+
   private struct CounterView: View {
     let probe: Probe
     @SelectState<CounterState, Int> private var count: Int
     @DispatchAction private var dispatch: (CounterAction) -> Void
 
-    init(probe: Probe) {
+    init(probe: Probe, marker: Marker = Marker()) {
       self.probe = probe
       _count = SelectState { state in
+        _ = marker
         probe.selections += 1
         return state.count
       }
@@ -132,19 +136,25 @@
       #expect(await host.waitUntil { probe.rendered.last == 2 })
     }
 
-    @Test func removingTheViewStopsReadingTheStore() async {
+    @Test func removingTheViewReleasesItsSubscriptionAndStopsReadingTheStore() async {
       let store = Store(initialState: CounterState(), reducer: reducer)
       let probe = Probe()
-      let host = Host(CounterView(probe: probe).store(store))
+      weak var weakMarker: Marker?
+      let host: Host
+      do {
+        let marker = Marker()
+        weakMarker = marker
+        host = Host(CounterView(probe: probe, marker: marker).store(store))
+      }
       // 購読が始まっていることを確かめてから外す。
       store.dispatch(.increment)
       #expect(await host.waitUntil { probe.rendered.last == 1 })
       host.replace(with: EmptyView())
+      // セレクタを保持していた値の持ち主（読んだ値と購読）が解放される。購読は持ち主と一緒に解放されるので、
+      // これ以降の変化は届かない。
+      #expect(await host.waitUntil { weakMarker == nil })
       let selectionsAfterRemoval = probe.selections
       store.dispatch(.increment)
-      // Store の変化の通知が一巡するのを待つ（後から登録した購読が届いた時点で、先の購読の処理も終わっている）。
-      var latest = store.values { $0.count }.makeAsyncIterator()
-      while await latest.next() != 2 {}
       host.layout()
       #expect(probe.selections == selectionsAfterRemoval)
     }
