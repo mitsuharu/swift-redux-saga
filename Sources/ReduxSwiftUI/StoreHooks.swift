@@ -5,7 +5,7 @@
 
   /// Environment の Store から値を読むプロパティラッパー（React Redux の `useSelector` 相当）。
   ///
-  /// 親の View で ``SwiftUI/View/store(_:)`` を付けておくと、子の View は Store の型（Action の型）を書かずに、
+  /// 親の View で `.store(_:)` を付けておくと、子の View は Store の型（Action の型）を書かずに、
   /// State から読む値だけを宣言できます。View は、読んだ値が変わったときだけ再描画されます。
   ///
   /// ```swift
@@ -22,7 +22,7 @@
   ///
   /// `.store(_:)` を入れ子にした場合は、State の型が一致する Store のうち、最も近い（内側の）ものを読みます。
   /// ``DispatchAction`` は Action の型で別に探すので、両者が同じ Store を指すとは限りません。
-  /// 使う Store を明示したいときは、``SwiftUI/View/store(_:id:)`` で付けた識別子を `store:` で渡します。
+  /// 使う Store を明示したいときは、`.store(_:id:)` で付けた識別子を `store:` で渡します。
   ///
   /// 再描画は結果が変わったときだけですが、セレクタは State が変わるたびと View の評価のたびに呼ばれます。
   /// 重い計算は、入力を絞った `createSelector` のセレクタを `static let` などで一度だけ作って渡してください。
@@ -96,7 +96,7 @@
   /// Environment の Store に Action を送る関数を取り出すプロパティラッパー（React Redux の `useDispatch` 相当）。
   ///
   /// `.store(_:)` を入れ子にした場合は、Action の型が一致する Store のうち、最も近い（内側の）ものに送ります。
-  /// 送る先を明示したいときは、``SwiftUI/View/store(_:id:)`` で付けた識別子を `store:` で渡します。
+  /// 送る先を明示したいときは、`.store(_:id:)` で付けた識別子を `store:` で渡します。
   ///
   /// ```swift
   /// struct LoginView: View {

@@ -4,9 +4,17 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-11
+
 ### 追加
 
-- SwiftUI で、Store の型を書かずに値を読む `@SelectState` と、Action を送る `@DispatchAction`（React Redux の `useSelector` / `useDispatch` に当たる、`ReduxSwiftUI`）。`@SelectState` は読んだ値（セレクタの計算結果を含む）が変わったときだけ再描画する。`.store(_:id:)` で識別子を付けた Store を、`store:` で指定して使える
+- SwiftUI で、Store の型を書かずに値を読む `@SelectState` と、Action を送る `@DispatchAction`（React Redux の `useSelector` / `useDispatch` に当たる、`ReduxSwiftUI`）。`@SelectState` は読んだ値（セレクタの計算結果を含む）が変わったときだけ再描画する
+- 識別子を付けて Store を Environment に入れる `.store(_:id:)` と `StoreID`。`@SelectState` / `@DispatchAction` の `store:` で指定して、入れ子にした同じ型の Store を区別できる
+
+### ドキュメント
+
+- [Saga の Effect](https://github.com/mitsuharu/swift-redux-saga/blob/0.2.0/docs/saga-effects.md): redux-saga の Effect との対応と、それぞれの使い方
+- README: Saga の処理を別の関数として定義して渡す書き方、`@SelectState` / `@DispatchAction` の使い方（入れ子の Store で使われる Store の決まり方、セレクタの再計算のコストとメモ化したセレクタの使い方）
 
 ## [0.1.0] - 2026-10-11
 
@@ -53,5 +61,6 @@
 - `TestClock`、`SagaTester`、`TestStore`。実時間ではなく「すべての Saga が Effect で止まったか」で待ち合わせる
 - 通信が重なる場面のテスト（待たずに送る `dispatch` と、届くまで待つ `receive(_:timeout:)`）
 
-[Unreleased]: https://github.com/mitsuharu/swift-redux-saga/compare/0.1.0...HEAD
+[Unreleased]: https://github.com/mitsuharu/swift-redux-saga/compare/0.2.0...HEAD
+[0.2.0]: https://github.com/mitsuharu/swift-redux-saga/releases/tag/0.2.0
 [0.1.0]: https://github.com/mitsuharu/swift-redux-saga/releases/tag/0.1.0

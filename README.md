@@ -13,7 +13,7 @@ Swift 6 で書かれた Redux（[Redux Toolkit](https://redux-toolkit.js.org/) �
 - **ロックインを避ける設計**: ビジネスロジック（UseCase / Repository）は本ライブラリを import せずに書け、Saga は「Action → ビジネスロジック → Action」の薄い層になります
 - **Observation 対応**: SwiftUI ではプロパティ単位で再描画され、UIKit の自動追跡（iOS 26 以降、iOS 18 はオプトイン）にも乗れます
 - **テストしやすい**: 実時間に依存しない `TestClock` と、Saga や Store の結果を検証する `SagaTester` / `TestStore`
-- **そのほか**: マクロ（`@Slice` / `@ActionCases` / `@TrackedState`）、入力欄の Binding、State の永続化、ログ出力のミドルウェア
+- **そのほか**: SwiftUI のフック（`@SelectState` / `@DispatchAction`）、マクロ（`@Slice` / `@ActionCases` / `@TrackedState`）、入力欄の Binding、State の永続化、ログ出力のミドルウェア
 
 ## 動作環境
 
@@ -27,7 +27,7 @@ Swift 6 で書かれた Redux（[Redux Toolkit](https://redux-toolkit.js.org/) �
 
 ```swift
 dependencies: [
-  .package(url: "https://github.com/mitsuharu/swift-redux-saga.git", from: "0.1.0")
+  .package(url: "https://github.com/mitsuharu/swift-redux-saga.git", from: "0.2.0")
 ]
 ```
 
@@ -40,7 +40,7 @@ dependencies: [
 | Redux（Store / Reducer / Slice / Selector など）だけを使う | `Redux` | 必須 |
 | Redux と Saga を使う | `ReduxSaga` | 必須（`Redux` と `Saga` を含むので、別に追加しなくてよい） |
 | Saga だけを、ほかの状態管理と組み合わせて使う | `Saga` | 必須 |
-| SwiftUI のヘルパー（`store.binding` / `.store(_:)`） | `ReduxSwiftUI` | 任意 |
+| SwiftUI のヘルパー（`store.binding` / `.store(_:)` / `@SelectState` / `@DispatchAction`） | `ReduxSwiftUI` | 任意 |
 | UIKit のヘルパー（`retained(by:)` / `store.action`） | `ReduxUIKit` | 任意 |
 | マクロ（`@Slice` / `@ActionCases` / `@TrackedState`） | `ReduxMacros` | 任意（swift-syntax を使います） |
 | State の永続化（`Persistence` / `PersistenceMiddleware`） | `ReduxPersistence` | 任意 |
@@ -649,7 +649,7 @@ Examples/
 
 - ToDo の Saga はログイン中だけ動き、ログアウトで止まります（`RootSagas`）。
 - ToDo の画面は MVVM を経由し（画面特有の状態は ViewModel、共有データと Saga が関わる処理は Store）、設定の画面は Store を直接使っています。
-- `@Slice` / `@ActionCases`、`@BindableState`、`actionChannel` / `debounce` / `takeLeading`、`LoggingMiddleware`、設定の永続化（`ReduxPersistence`）、`TestStore` によるテストを使っています。
+- `@Slice` / `@ActionCases`、`@BindableState`、`@SelectState` / `@DispatchAction`（SwiftUI のログイン画面）、`actionChannel` / `debounce` / `takeLeading`、`LoggingMiddleware`、設定の永続化（`ReduxPersistence`）、`TestStore` によるテストを使っています。
 
 `Examples/Examples.xcodeproj` を Xcode で開いて実行できます。
 
