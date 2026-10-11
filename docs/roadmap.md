@@ -140,5 +140,20 @@
 | 12-25 | `fix/example-refresh-control-lifetime` | UIKit Example の更新コントロールが自分自身を保持する循環参照を解消する （[#80](https://github.com/mitsuharu/swift-redux-saga/pull/80)） |
 | 12-26 | `fix/persistence-operation-order` | 削除を保存と同じ順序に並べ、削除待ちの間に予約された新しい保存を失わない （[#82](https://github.com/mitsuharu/swift-redux-saga/pull/82)） |
 | 12-27 | `fix/example-auth-event-gap` | Example で認証 State の読み取り中に届いた再ログインを取りこぼさない （[#84](https://github.com/mitsuharu/swift-redux-saga/pull/84)） |
-| 12-28 | `ci/release-workflow` | タグの push か手動実行で、タグと GitHub Release を作るワークフロー |
-| 12-29 | `ci/release-generated-notes` | リリースノートに、自動で作る PR の一覧を付ける |
+| 12-28 | `ci/release-workflow` | タグの push か手動実行で、タグと GitHub Release を作るワークフロー （[#85](https://github.com/mitsuharu/swift-redux-saga/pull/85)） |
+| 12-29 | `ci/release-generated-notes` | リリースノートに、自動で作る PR の一覧を付ける （[#87](https://github.com/mitsuharu/swift-redux-saga/pull/87)） |
+
+## M13: 0.2.0（SwiftUI のフック）
+
+| # | ブランチ | 内容 |
+| --- | --- | --- |
+| 13-1 | `docs/readme-worker-functions` | README に、Saga の処理を別の関数として定義して渡す書き方 （[#88](https://github.com/mitsuharu/swift-redux-saga/pull/88)） |
+| 13-2 | `docs/saga-effects` | Saga の Effect の解説（redux-saga との対応） （[#89](https://github.com/mitsuharu/swift-redux-saga/pull/89)） |
+| 13-3 | `feature/swiftui-select-dispatch` | `@SelectState` / `@DispatchAction` （[#90](https://github.com/mitsuharu/swift-redux-saga/pull/90)） |
+| 13-4 | `feature/example-select-dispatch` | Example のログイン画面をフックで書く （[#91](https://github.com/mitsuharu/swift-redux-saga/pull/91)） |
+| 13-5 | `docs/select-state-scope` | フックは SwiftUI の View の中だけで使えることを README に書く （[#92](https://github.com/mitsuharu/swift-redux-saga/pull/92)） |
+| 13-6 | `fix/select-state-selector-change` | 同じ Store でセレクタを変えたときに新しいセレクタで読む、関係のない変更で再描画しない （[#93](https://github.com/mitsuharu/swift-redux-saga/pull/93)） |
+| 13-7 | `test/hooks-view-identity` | 同じ View のまま対象・Store が変わる場合と Optional の値を、実際の View で確かめる （[#97](https://github.com/mitsuharu/swift-redux-saga/pull/97)） |
+| 13-8 | `docs/hooks-store-resolution` | 入れ子の Store でフックが使う先の決まり方、識別子で Store を指定する `.store(_:id:)` （[#98](https://github.com/mitsuharu/swift-redux-saga/pull/98)） |
+| 13-9 | `docs/select-state-recompute` | セレクタの再計算のコストと、メモ化したセレクタの使い方 （[#99](https://github.com/mitsuharu/swift-redux-saga/pull/99)） |
+| 13-10 | `docs/release-0.2.0` | 0.2.0 のリリース（CHANGELOG、README のインストール手順） |
