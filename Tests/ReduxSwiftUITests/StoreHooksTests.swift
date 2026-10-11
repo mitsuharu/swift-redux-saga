@@ -60,6 +60,54 @@
       token.cancel()
     }
 
+    @Test func changingTheSelectorForTheSameStoreReadsWithTheNewSelector() async {
+      let store = Store(initialState: ListState(items: [10, 20]), reducer: reducer)
+      let source = StoreSource(store)
+      let selection = Selection<Int>()
+      selection.connect(to: source) { $0.items.first ?? 0 }
+      #expect(selection.value == 10)
+      // SwiftUI が View の状態を保ったまま、表示する対象を変えた（最初の要素から最後の要素へ）。
+      selection.connect(to: source) { $0.items.last ?? 0 }
+      #expect(selection.value == 20)
+      // 以後の変化も、新しいセレクタで読む（古いセレクタのままなら 10 のままで、値は届かない）。
+      let (values, continuation) = AsyncStream.makeStream(of: Int?.self)
+      let token = ObservationToken.observe {
+        selection.value
+      } onChange: {
+        continuation.yield($0)
+      }
+      var iterator = values.makeAsyncIterator()
+      #expect(await iterator.next() == 20)
+      store.dispatch(.add(30))
+      #expect(await iterator.next() == 30)
+      token.cancel()
+    }
+
+    @Test func replacingTheStoreReadsFromTheNewStoreAndStopsFollowingTheOldOne() async {
+      let first = Store(initialState: ListState(items: [2]), reducer: reducer)
+      let second = Store(initialState: ListState(items: [2, 4, 6]), reducer: reducer)
+      let selection = Selection<Int>()
+      selection.connect(to: StoreSource(first)) { evenCount($0) }
+      #expect(selection.value == 1)
+      // Environment の Store が差し替わった。
+      selection.connect(to: StoreSource(second)) { evenCount($0) }
+      #expect(selection.value == 3)
+      let (values, continuation) = AsyncStream.makeStream(of: Int?.self)
+      let token = ObservationToken.observe {
+        selection.value
+      } onChange: {
+        continuation.yield($0)
+      }
+      var iterator = values.makeAsyncIterator()
+      #expect(await iterator.next() == 3)
+      // 前の Store の変化では変わらず、新しい Store の変化で変わる。
+      first.dispatch(.add(8))
+      first.dispatch(.add(10))
+      second.dispatch(.add(12))
+      #expect(await iterator.next() == 4)
+      token.cancel()
+    }
+
     @Test func anActionSinkDispatchesToTheStore() {
       let store = Store(initialState: ListState(), reducer: reducer)
       ActionSink(store).dispatch(.add(4))
