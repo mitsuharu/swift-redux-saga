@@ -6,7 +6,7 @@
 
 ### 追加
 
-- SwiftUI で、Store の型を書かずに値を読む `@SelectState` と、Action を送る `@DispatchAction`（React Redux の `useSelector` / `useDispatch` に当たる、`ReduxSwiftUI`）。`@SelectState` は読んだ値（セレクタの計算結果を含む）が変わったときだけ再描画する
+- SwiftUI で、Store の型を書かずに値を読む `@SelectState` と、Action を送る `@DispatchAction`（React Redux の `useSelector` / `useDispatch` に当たる、`ReduxSwiftUI`）。`@SelectState` は読んだ値（セレクタの計算結果を含む）が変わったときだけ再描画する。`.store(_:id:)` で識別子を付けた Store を、`store:` で指定して使える
 
 ## [0.1.0] - 2026-10-11
 
