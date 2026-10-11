@@ -333,9 +333,11 @@ func makeStore() -> Store<Counter.State, Counter.Action> {
 > [!NOTE]
 > Saga は `run` から非同期に動き出しますが、`run` の直後（View の表示時など）に dispatch した Action も取りこぼしません。起動した Saga が最初の Effect に達するまで溜めておき、後から届けます（redux-saga の `run` がルート Saga を最初の Effect まで同期に進めるのと同じ結果になります）。
 
-#### ログ出力（LoggingMiddleware）
+#### ミドルウェアとログ出力（LoggingMiddleware）
 
-`LoggingMiddleware` は、dispatch された Action を `os.Logger` に出力します。既定ではデバッグビルドでだけ出力します。値は `.private` として出力するので、Xcode から実行しているときのコンソールには表示され、端末のログでは伏せられます。
+ミドルウェアは、dispatch された Action が reducer に届くまでの間に処理を挟む仕組みです。作り方と使い方（Action を見て外部に知らせる、State の変化を見る、Action を止める、Saga との使い分けなど）は、[ミドルウェア](docs/middleware.md)で詳しく説明しています。
+
+よく使うミドルウェアとして、Action をログに出す `LoggingMiddleware` を同梱しています。`LoggingMiddleware` は、dispatch された Action を `os.Logger` に出力します。既定ではデバッグビルドでだけ出力します。値は `.private` として出力するので、Xcode から実行しているときのコンソールには表示され、端末のログでは伏せられます。
 
 ```swift
 let store = Store(initialState: AppState(), reducer: appReducer, middleware: [
@@ -662,6 +664,7 @@ Examples/
 - [ロードマップ](docs/roadmap.md)
 - [Saga の Effect](docs/saga-effects.md)
 - [State の永続化](docs/persistence.md)
+- [ミドルウェア](docs/middleware.md)
 - [ReSwift / ReSwift-Saga からの移行ガイド](docs/migration.md)
 
 ## 背景

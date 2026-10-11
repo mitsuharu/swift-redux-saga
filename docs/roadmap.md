@@ -163,3 +163,4 @@
 | # | ブランチ | 内容 |
 | --- | --- | --- |
 | 14-1 | `docs/persistence-guide` | State の永続化の使い方の解説（docs/persistence.md） |
+| 14-2 | `docs/middleware-guide` | ミドルウェアの作り方と `LoggingMiddleware` の解説（docs/middleware.md） |

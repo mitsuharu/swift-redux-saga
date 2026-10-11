@@ -7,6 +7,7 @@
 ### ドキュメント
 
 - [State の永続化](https://github.com/mitsuharu/swift-redux-saga/blob/main/docs/persistence.md): 保存する部分の選び方、保存先、保存のタイミング、データの削除、保存形式の変更、テストの書き方
+- [ミドルウェア](https://github.com/mitsuharu/swift-redux-saga/blob/main/docs/middleware.md): ミドルウェアの作り方とよくある使い方、Saga との使い分け、同梱の `LoggingMiddleware` の設定
 
 ## [0.2.0] - 2026-10-11
 
