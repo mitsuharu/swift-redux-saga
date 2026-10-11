@@ -71,9 +71,14 @@ extension SagaContext {
   /// 作った Saga が終わると、チャネルは閉じます。
   ///
   /// ```swift
-  /// let ticks = ctx.eventChannel(buffer: .newest(1)) { emit, finish in
-  ///   let timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in emit(Date()) }
-  ///   return { timer.invalidate() }
+  /// let ticks = ctx.eventChannel(buffer: .newest(1)) { (emit: @escaping @Sendable (Date) -> Void, finish) in
+  ///   let task = Task {
+  ///     while !Task.isCancelled {
+  ///       try? await Task.sleep(for: .seconds(1))
+  ///       emit(Date())
+  ///     }
+  ///   }
+  ///   return { task.cancel() }
   /// }
   /// ```
   public func eventChannel<Value: Sendable>(

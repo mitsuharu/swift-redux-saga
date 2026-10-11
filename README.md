@@ -163,6 +163,8 @@ struct CounterSagas: Sendable {
 | `all` / `race` | `try await ctx.all(...)` / `try await ctx.race(...)` |
 | `actionChannel` / `eventChannel` | `ctx.actionChannel(...)` / `ctx.eventChannel(...)` |
 
+各行のコード例と説明は [Saga の Effect](docs/saga-effects.md) にまとめています。
+
 ワーカーは、redux-saga の `takeLatest(FETCH, fetchUser)` のように、別に定義した関数を名前で渡すこともできます。ワーカーの型は `(SagaContext, 値) async throws -> Void` です。
 
 ```swift
@@ -581,6 +583,7 @@ Examples/
 - [変更履歴（CHANGELOG）](CHANGELOG.md)
 - [設計書](docs/design.md)
 - [ロードマップ](docs/roadmap.md)
+- [Saga の Effect](docs/saga-effects.md)
 - [ReSwift / ReSwift-Saga からの移行ガイド](docs/migration.md)
 
 ## 背景
