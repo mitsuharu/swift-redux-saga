@@ -448,7 +448,23 @@ RootView()
 @DispatchAction private var dispatch: (AppAction) -> Void  // AppAction は childStore が上書きしているので、childStore に送る
 ```
 
-`store.scope(...)` で作った子の Store を内側に置く場合も同じです。読む先と送る先をそろえたいときは、State と Action の両方の型が異なる Store を入れ子にするか、`@Environment(Store<State, Action>.self)` で Store そのものを取り出してください（こちらは State と Action の両方の型が一致する、最も近い Store です）。同じ型の Store を入れ子にした場合は、どの書き方でも内側の Store を使います。外側の Store を使いたい View は、内側の `.store(_:)` の外に置いてください。
+`store.scope(...)` で作った子の Store を内側に置く場合も同じです。読む先と送る先をそろえたいときは、State と Action の両方の型が異なる Store を入れ子にするか、`@Environment(Store<State, Action>.self)` で Store そのものを取り出してください（こちらは State と Action の両方の型が一致する、最も近い Store です）。同じ型の Store を入れ子にした場合は、どの書き方でも内側の Store を使います。
+
+どの Store を使うかを明示したいときは、`.store(_:id:)` で識別子を付けて入れ、フックに `store:` で同じ識別子を渡します。識別子は、State と Action の型と組で探されます。識別子を付けた Store は、識別子を指定しないフックや `@Environment(Store<State, Action>.self)` からは見えないので、外側の `.store(_:)` を上書きしません。
+
+```swift
+extension StoreID {
+  static let app: StoreID = "app"
+}
+
+RootView()
+  .store(childStore)          // 識別子なし（型で探すフック向け）
+  .store(appStore, id: .app)  // 識別子付き
+
+// RootView の中で
+@SelectState(\AppState.user, store: .app) private var user
+@DispatchAction(store: .app) private var dispatch: (AppAction) -> Void  // 読む先と同じ appStore に送る
+```
 
 `TextField` や `Toggle` など、値を書き戻すだけの入力欄は、State のプロパティに `@BindableState` を付け、Action に `case binding(BindingAction<State>)` を用意すると、部品ごとに Action を書かずに済みます。
 

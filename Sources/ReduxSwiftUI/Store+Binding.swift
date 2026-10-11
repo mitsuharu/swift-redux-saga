@@ -91,6 +91,7 @@
     ///
     /// 入れ子にした場合、`@Environment(Store<State, Action>.self)` は両方の型、`@SelectState` は State の型、
     /// `@DispatchAction` は Action の型が一致する Store のうち、最も近いものを使います。
+    /// 識別子で区別したい場合は ``store(_:id:)`` を使います。
     public func store<State: Sendable, Action: Sendable>(_ store: Store<State, Action>) -> some View
     {
       environment(store)

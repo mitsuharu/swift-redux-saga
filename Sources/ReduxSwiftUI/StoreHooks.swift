@@ -22,33 +22,57 @@
   ///
   /// `.store(_:)` を入れ子にした場合は、State の型が一致する Store のうち、最も近い（内側の）ものを読みます。
   /// ``DispatchAction`` は Action の型で別に探すので、両者が同じ Store を指すとは限りません。
+  /// 使う Store を明示したいときは、``SwiftUI/View/store(_:id:)`` で付けた識別子を `store:` で渡します。
   // メインアクターに隔離しないのは、DynamicProperty の update() が隔離されていない要求で、
   // 隔離した型では準拠できないため。update() と値の読み取りはメインアクター上で呼ばれる（View の評価中）。
   @propertyWrapper
   public struct SelectState<State: Sendable, Value: Equatable>: DynamicProperty {
     @Environment(StoreSource<State>.self) private var source: StoreSource<State>?
+    @Environment(\.namedStores) private var namedStores
     @SwiftUI.State private var selection = Selection<Value>()
     private let select: @MainActor (State) -> Value
+    private let storeID: StoreID?
 
     /// State のプロパティ（キーパス）を読みます。
-    public init(_ keyPath: KeyPath<State, Value> & Sendable) {
+    ///
+    /// - Parameters:
+    ///   - keyPath: 読むプロパティ。
+    ///   - id: 読む Store の識別子（`.store(_:id:)` で付けたもの）。`nil` なら、State の型が一致する最も近い Store。
+    public init(_ keyPath: KeyPath<State, Value> & Sendable, store id: StoreID? = nil) {
       self.select = { $0[keyPath: keyPath] }
+      self.storeID = id
     }
 
     /// セレクタ（`createSelector` などで作ったもの）で読みます。
-    public init(_ selector: Redux.Selector<State, Value>) where Value: Sendable {
+    ///
+    /// - Parameters:
+    ///   - selector: 値を取り出すセレクタ。
+    ///   - id: 読む Store の識別子（`.store(_:id:)` で付けたもの）。`nil` なら、State の型が一致する最も近い Store。
+    public init(_ selector: Redux.Selector<State, Value>, store id: StoreID? = nil)
+    where Value: Sendable {
       self.select = { selector($0) }
+      self.storeID = id
     }
 
     /// State から値を取り出す関数で読みます。
-    public init(_ select: @escaping @MainActor (State) -> Value) {
+    ///
+    /// - Parameters:
+    ///   - id: 読む Store の識別子（`.store(_:id:)` で付けたもの）。`nil` なら、State の型が一致する最も近い Store。
+    ///   - select: 値を取り出す関数。
+    public init(store id: StoreID? = nil, _ select: @escaping @MainActor (State) -> Value) {
       self.select = select
+      self.storeID = id
     }
 
     /// 読んだ値。
     @MainActor
     public var wrappedValue: Value {
       guard let value = selection.value else {
+        if let storeID {
+          preconditionFailure(
+            "No Store<\(State.self), _> with id \"\(storeID)\" in the environment. Add .store(store, id: \"\(storeID)\") to an ancestor view."
+          )
+        }
         preconditionFailure(
           "No Store<\(State.self), _> in the environment. Add .store(store) to an ancestor view.")
       }
@@ -57,7 +81,8 @@
 
     public nonisolated func update() {
       // self ではなく、メインアクターに隔離された値だけを渡す（self は Sendable でないため）。
-      let (source, selection, select) = (source, selection, select)
+      let source = storeID.map { namedStores.source(State.self, id: $0) } ?? source
+      let (selection, select) = (selection, select)
       MainActor.assumeIsolated {
         guard let source else { return }
         selection.connect(to: source, select: select)
@@ -68,6 +93,7 @@
   /// Environment の Store に Action を送る関数を取り出すプロパティラッパー（React Redux の `useDispatch` 相当）。
   ///
   /// `.store(_:)` を入れ子にした場合は、Action の型が一致する Store のうち、最も近い（内側の）ものに送ります。
+  /// 送る先を明示したいときは、``SwiftUI/View/store(_:id:)`` で付けた識別子を `store:` で渡します。
   ///
   /// ```swift
   /// struct LoginView: View {
@@ -81,14 +107,26 @@
   // メインアクターに隔離しない理由は SelectState と同じ。
   @propertyWrapper
   public struct DispatchAction<Action: Sendable>: DynamicProperty {
-    @Environment(ActionSink<Action>.self) private var sink: ActionSink<Action>?
+    @Environment(ActionSink<Action>.self) private var unnamedSink: ActionSink<Action>?
+    @Environment(\.namedStores) private var namedStores
+    private let storeID: StoreID?
 
-    public init() {}
+    /// - Parameter id: 送る先の Store の識別子（`.store(_:id:)` で付けたもの）。
+    ///   `nil` なら、Action の型が一致する最も近い Store。
+    public init(store id: StoreID? = nil) {
+      self.storeID = id
+    }
 
     /// Store に Action を送る関数。
     @MainActor
     public var wrappedValue: (Action) -> Void {
+      let sink = storeID.map { namedStores.sink(Action.self, id: $0) } ?? unnamedSink
       guard let sink else {
+        if let storeID {
+          preconditionFailure(
+            "No Store<_, \(Action.self)> with id \"\(storeID)\" in the environment. Add .store(store, id: \"\(storeID)\") to an ancestor view."
+          )
+        }
         preconditionFailure(
           "No Store<_, \(Action.self)> in the environment. Add .store(store) to an ancestor view.")
       }
