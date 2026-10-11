@@ -371,6 +371,8 @@ let store = Store(
 
 保存形式を変えたときは `version` を上げ、`migrate` で古い形式から変換できます。読み込み中やエラーのような一時的な状態は保存しないでください。
 
+保存する部分の選び方（複数のプロパティを選ぶ、State 全体を保存する）、保存先の作り方（Keychain など）、保存のタイミング、データの削除、保存形式の変更、テストの書き方は、[State の永続化](docs/persistence.md)で詳しく説明しています。
+
 #### ネストしたプロパティ単位の再描画
 
 `store.profile.name` のようにネストしたプロパティを読む場合、`profile` の型に `@TrackedState`（`ReduxMacros`）を付けると、`name` が変わったときだけ再描画されます（付けないと `profile` のどこが変わっても再描画されます）。
@@ -659,6 +661,7 @@ Examples/
 - [設計書](docs/design.md)
 - [ロードマップ](docs/roadmap.md)
 - [Saga の Effect](docs/saga-effects.md)
+- [State の永続化](docs/persistence.md)
 - [ReSwift / ReSwift-Saga からの移行ガイド](docs/migration.md)
 
 ## 背景
