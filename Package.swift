@@ -2,6 +2,9 @@
 import CompilerPluginSupport
 import PackageDescription
 
+// マニフェストはバンドルの直下に名前を変えずに置く必要があるので、加工されない .copy で入れる。
+let privacyManifest: [Resource] = [.copy("PrivacyInfo.xcprivacy")]
+
 let package = Package(
   name: "swift-redux-saga",
   platforms: [
@@ -31,13 +34,18 @@ let package = Package(
     .package(url: "https://github.com/swiftlang/swift-syntax.git", "600.0.0"..<"605.0.0")
   ],
   targets: [
+    // アプリに組み込まれるターゲットには、プライバシーマニフェスト（PrivacyInfo.xcprivacy）を入れる。
+    // 情報の収集や追跡をしないターゲットは空の宣言だが、App Store の審査で確認できるよう、すべてに置く
+    // （「収集していない」ことを明示するため）。テスト支援のターゲットはアプリに入らないので置かない。
     // ライブラリ内部で共有する部品。プロダクトとして公開せず、`package` アクセスで使う。
-    .target(name: "InternalPrimitives"),
-    .target(name: "Redux", dependencies: ["InternalPrimitives"]),
-    .target(name: "Saga", dependencies: ["InternalPrimitives"]),
-    .target(name: "ReduxSaga", dependencies: ["Redux", "Saga", "InternalPrimitives"]),
-    .target(name: "ReduxSwiftUI", dependencies: ["Redux"]),
-    .target(name: "ReduxUIKit", dependencies: ["Redux"]),
+    .target(name: "InternalPrimitives", resources: privacyManifest),
+    .target(name: "Redux", dependencies: ["InternalPrimitives"], resources: privacyManifest),
+    .target(name: "Saga", dependencies: ["InternalPrimitives"], resources: privacyManifest),
+    .target(
+      name: "ReduxSaga", dependencies: ["Redux", "Saga", "InternalPrimitives"],
+      resources: privacyManifest),
+    .target(name: "ReduxSwiftUI", dependencies: ["Redux"], resources: privacyManifest),
+    .target(name: "ReduxUIKit", dependencies: ["Redux"], resources: privacyManifest),
     .target(name: "SagaTesting", dependencies: ["Saga", "InternalPrimitives"]),
     .target(
       name: "ReduxTesting",
@@ -51,9 +59,13 @@ let package = Package(
         .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
       ]
     ),
-    .target(name: "ReduxMacros", dependencies: ["Redux", "ReduxMacrosPlugin"]),
+    .target(
+      name: "ReduxMacros", dependencies: ["Redux", "ReduxMacrosPlugin"], resources: privacyManifest),
     // State の永続化。Foundation（JSON / ファイル / UserDefaults）を使うので、Redux 本体から分ける。
-    .target(name: "ReduxPersistence", dependencies: ["Redux", "InternalPrimitives"]),
+    // UserDefaultsStorage が UserDefaults（理由の申告が必要な API）を使うので、マニフェストで理由を申告する。
+    .target(
+      name: "ReduxPersistence", dependencies: ["Redux", "InternalPrimitives"],
+      resources: privacyManifest),
 
     .testTarget(name: "InternalPrimitivesTests", dependencies: ["InternalPrimitives"]),
     .testTarget(name: "ReduxTests", dependencies: ["Redux", "InternalPrimitives"]),

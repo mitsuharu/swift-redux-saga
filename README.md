@@ -20,6 +20,7 @@ Swift 6 で書かれた Redux（[Redux Toolkit](https://redux-toolkit.js.org/) �
 - Swift 6.2 以降（Xcode 26 以降）
 - iOS 17 / macOS 14 / tvOS 17 / watchOS 10 / visionOS 1 以降
 - UI に依存しないプロダクト（`Redux` / `Saga` / `ReduxSaga` / `ReduxMacros` / `ReduxPersistence` / `SagaTesting` / `ReduxTesting`）は Linux でも動きます
+- アプリに組み込まれるターゲットには、プライバシーマニフェスト（`PrivacyInfo.xcprivacy`）を同梱しています。本パッケージは情報の収集や追跡をしません。理由の申告が必要な API は、`ReduxPersistence` の `UserDefaultsStorage` が使う `UserDefaults` だけで、アプリが `UserDefaultsStorage` を使ったときにだけ読み書きします（理由 `C56D.1`）
 
 ## インストール
 
