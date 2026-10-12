@@ -114,16 +114,9 @@ Xcode のプロジェクトでは、File > Add Package Dependencies からパッ
 | Store | State を 1 か所に持ち、Action を受け取って State を更新する |
 | Saga | Action を待ち、通信などの処理をして、結果を Action で返す |
 
-```mermaid
-flowchart LR
-  View -- dispatch --> Action
-  Action --> Middleware
-  Middleware --> Reducer
-  Reducer -- 新しい State --> Store
-  Store -- State を読んで表示 --> View
-  Middleware -- Action を渡す --> Saga
-  Saga -- "put（通信などの結果）" --> Action
-```
+![Action が Middleware と Reducer を通って Store の State になり、View が State を表示する。Saga は Middleware から Action を受け取り、API などを呼んで、結果の Action を put で戻す](docs/images/flow.svg)
+
+実線が Redux の通常の流れで、Action は一直線に Reducer まで進みます。点線が Saga（副作用）の流れで、Saga は通常の流れの外側で Action を受け取り、通信などの結果を新しい Action として流れの先頭に戻します。
 
 はじめて使う場合は、カウンターのアプリを作りながら順に説明する[はじめかた](docs/getting-started.md)から読むことをおすすめします。以下は、各機能の要点です。
 
