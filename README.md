@@ -104,7 +104,25 @@ Xcode のプロジェクトでは、File > Add Package Dependencies からパッ
 
 ## 使い方
 
+アプリの状態は、次の部品で扱います。View は State を読んで表示し、操作を Action として Store に送ります（dispatch）。Store は reducer で State を更新し、通信などの非同期の処理は Saga が受け持って、結果を Action で Store に戻します。
+
+| 部品 | 役割 |
+| --- | --- |
+| State | アプリの状態を表す値（構造体） |
+| Action | 「ボタンが押された」「データが届いた」のような出来事を表す値（enum） |
+| reducer | 今の State と Action から次の State を作る関数（副作用を持たない） |
+| Store | State を 1 か所に持ち、Action を受け取って State を更新する |
+| Saga | Action を待ち、通信などの処理をして、結果を Action で返す |
+
+![Action が Middleware と Reducer を通って Store の State になり、View が State を表示する。Saga は Middleware から Action を受け取り、API などを呼んで、結果の Action を put で戻す](docs/images/flow.svg)
+
+実線が Redux の通常の流れで、Action は一直線に Reducer まで進みます。点線が Saga（副作用）の流れで、Saga は通常の流れの外側で Action を受け取り、通信などの結果を新しい Action として流れの先頭に戻します。
+
+はじめて使う場合は、カウンターのアプリを作りながら順に説明する[はじめかた](docs/getting-started.md)から読むことをおすすめします。以下は、各機能の要点です。
+
 ### State・Action・reducer（Slice）
+
+1 つの機能の State と Action の型と reducer を、`Slice` としてまとめます（Redux Toolkit の `createSlice` に当たります）。
 
 ```swift
 import Redux
@@ -135,7 +153,7 @@ enum Counter: Slice {
 }
 ```
 
-reducer は `inout` で State を直接書き換える純粋関数です。複数の Slice は `Reducer.slice(_:state:action:)` で親の State にまとめられます。
+reducer は `inout` で State を直接書き換える純粋関数です。`Slice` に準拠すると、`Counter.reducer` で reducer を取り出せます。複数の機能（Slice）は `Reducer.slice(_:state:action:)` でアプリ全体の State にまとめられます（[機能を組み合わせる](docs/composition.md)）。
 
 ### Saga
 
@@ -145,6 +163,11 @@ reducer は `inout` で State を直接書き換える純粋関数です。複�
 // Domain（本ライブラリを import しない）
 struct CounterRepository: Sendable {
   let load: @Sendable () async throws -> Int
+}
+
+extension CounterRepository {
+  // 本番の実装（fetchCountFromServer はアプリの通信処理）。テストでは別の実装を渡す。
+  static let live = CounterRepository { try await fetchCountFromServer() }
 }
 ```
 
@@ -170,6 +193,13 @@ struct CounterSagas: Sendable {
   }
 }
 ```
+
+- `Saga("counter")` の文字列は、デバッグ用の名前です（エラーが起きた Saga の表示に使われます）。
+- `take`（Action を待つ）、`put`（Action を発行する）、`call`（関数を呼ぶ）など、`ctx` の関数を Effect と呼びます。
+- `.action(.fetch)` は、待つ Action を表すパターン（`ActionPattern`）です。Action が等しいかで判定します（後述）。
+- `takeLatest` は、Action が届くたびに後ろのクロージャ（ワーカー）を動かし、前のワーカーが動いていればキャンセルするヘルパーです。
+
+redux-saga の Effect との対応は次のとおりです。
 
 | redux-saga | swift-redux-saga |
 | --- | --- |
@@ -227,6 +257,21 @@ let id = try await ctx.take(fetch)
 
 #### 機能ごとの Store と Saga を組み合わせる
 
+ログインと ToDo のように機能が複数ある場合は、アプリ全体の State（`AppState`）に機能ごとの State をプロパティとして持たせ、アプリ全体の Action（`AppAction`）に機能ごとの Action を関連値に持つ case を並べます。Store はアプリに 1 つだけ作ります。組み立て方は[機能を組み合わせる](docs/composition.md)で順に説明しています。
+
+```swift
+struct AppState: Sendable, Equatable {
+  var auth = AuthFeature.State()
+  var todo = TodoFeature.State()
+}
+
+@ActionCases   // case ごとに関連値を取り出すプロパティ（\.auth、\.todo）を生成する（後述の「マクロ」）
+enum AppAction: Sendable {
+  case auth(AuthFeature.Action)
+  case todo(TodoFeature.Action)
+}
+```
+
 機能ごとにモジュールを分ける場合、機能の View や ViewModel には、アプリ全体の Store を `scope` した Store を渡せます。機能のモジュールは、アプリ全体の `AppState` / `AppAction` を知らずに、機能の型の Store だけで書けます。読み取りの追跡はプロパティ単位のままです。
 
 ```swift
@@ -246,9 +291,11 @@ _ = try await ctx.take(.case(\.logoutTapped))
 ctx.cancel(session)
 ```
 
-Saga の `action:` には `@ActionCases` が生成する case のプロパティ（`\.todo`）を、`embed:` と Store の `scope` の `action:` には case（`AppAction.todo`）を渡します。
+Saga の `action:` には `@ActionCases` が生成する case のプロパティ（`\.todo`）を、`embed:` と Store の `scope` の `action:` には case（`AppAction.todo`）を渡します。`\.auth?.loggedIn` のように `?.` でつないだキーパスは、機能の Action（`AuthFeature.Action`）にも `@ActionCases` を付けた場合に書けます。
 
 #### Saga の寿命（画面の表示・ログイン）
+
+Saga を動かす期間の決め方は、[機能を組み合わせる](docs/composition.md#saga-を動かす期間)でも例を挙げて説明しています。
 
 `sagaMiddleware.run` で起動した Saga は、呼び出し元の Task とは独立して動き、`stop()` で止めると二度と動きません（`stop()` は Store を捨てるときのためのものです）。画面の表示中だけ、ログイン中だけ動かす Saga は、次のように起動と停止を対応させます。
 
@@ -335,6 +382,8 @@ ctx.takeEvery(.case(\.user?.fetch)) { ctx, id in ... }
 マクロなしでも同じことができます（`.case { if case .user(.fetch(let id)) = $0 { id } else { nil } }`）。Xcode は初めてマクロを使うときに許可を求めます。
 
 ### Store と組み立て
+
+Store はアプリに 1 つ作ります。Saga は `SagaMiddleware`（Action を Saga に渡すミドルウェア）を通して Store につなぎ、Store を作った後で `run` で起動します。
 
 ```swift
 import Redux
@@ -443,10 +492,21 @@ struct CounterView: View {
   }
 }
 
-// 親で .store(store) を付ける。
+// Store はアプリの起動時に作り、.store(_:) で View に渡す。
+@main
+struct CounterApp: App {
+  @State private var store = makeStore()   // 上の「Store と組み立て」の関数
+
+  var body: some Scene {
+    WindowGroup {
+      CounterView()
+        .store(store)
+    }
+  }
+}
 ```
 
-React Redux の `useSelector` / `useDispatch` のように、Store の型を書かずに、読む値と Action を送る関数だけを宣言することもできます（親で `.store(store)` を付けておく）。`@SelectState` は、読んだ値が変わったときだけ View を再描画します。`createSelector` で作ったセレクタを渡した場合も、計算結果が変わったときだけ再描画されます。
+React Redux の `useSelector` / `useDispatch` のように、Store の型を書かずに、読む値と Action を送る関数だけを宣言することもできます（親で `.store(store)` を付けておく）。次の例の `AppState` / `AppAction` は、複数の機能をまとめたアプリ全体の State と Action です（[機能ごとの Store と Saga を組み合わせる](#機能ごとの-store-と-saga-を組み合わせる)）。`@SelectState` は、読んだ値が変わったときだけ View を再描画します。`createSelector` で作ったセレクタを渡した場合も、計算結果が変わったときだけ再描画されます。
 
 ```swift
 struct LoginView: View {
@@ -535,7 +595,7 @@ enum Action: Sendable, BindableAction {
 TextField("New ToDo", text: store.binding(\.$draft))
 ```
 
-一覧の要素は、添字（`\.todos[index]`）ではなく ID で読んでください。Store は読んだキーパスを覚えて変化を判定するため、添字で読んだ要素を削除すると範囲外になり、プログラムが停止します。`Identifiable` の配列は `[id:]` で、`EntityState` は `entities[id]` で読めます（要素がなければ `nil`）。Optional の値の `Binding` は `default:` を指定して作ります。
+一覧の要素は、添字（`\.todos[index]`）ではなく ID で読んでください。Store は読んだキーパスを覚えて変化を判定するため、添字で読んだ要素を削除すると範囲外になり、プログラムが停止します。`Identifiable` の配列は `[id:]` で、`EntityState`（ID で引ける一覧を持つ型。Redux Toolkit の `createEntityAdapter` に当たります）は `entities[id]` で読めます（要素がなければ `nil`）。Optional の値の `Binding` は `default:` を指定して作ります。
 
 ```swift
 ForEach(store.todos) { todo in
@@ -548,7 +608,7 @@ ForEach(store.todos) { todo in
 
 ### UIKit
 
-iOS 26 以降（または `UIObservationTrackingEnabled` を有効にした iOS 18 以降）は、`updateProperties()` や `viewWillLayoutSubviews()` で `store.count` を読むだけで自動で追跡されます。それ以前の OS では `observe` を使います。
+iOS 26 以降（または `UIObservationTrackingEnabled` を有効にした iOS 18 以降）は、`updateProperties()` や `viewWillLayoutSubviews()` で `store.count` を読むだけで自動で追跡されます。それ以前の OS では `observe` を使います。`observe` は、読んだ値をすぐに 1 回、その後は変わるたびに渡します。`retained(by: self)` を付けると、`self`（ViewController など）が解放されるまで購読を続けます。`store.action(_:title:)` は、押すとその Action を dispatch する `UIAction` を作ります。
 
 ```swift
 import ReduxUIKit
@@ -643,6 +703,8 @@ import Testing
 }
 ```
 
+- `send` / `receive` の後ろのクロージャには、期待する State の変化を書きます。直前の State を受け取り、Action を適用した後の State になるように書き換えます。実際の State と違えばテストは失敗します。
+- `receive` は、Saga が発行した Action を順に確かめます。`finish()` は、確かめていない Action が残っていないことを確かめて、Saga を止めます。
 - 待ち合わせは実時間ではなく「すべての Saga が Effect（`take` / `delay` / `join` など）で止まったか」で行うため、テストが実行環境の速さに左右されません。
 - `delay` / `debounce` / `throttle` は `TestClock` で時間を進めて検証します（`await store.advance(by: .seconds(1))`）。
 - Store なしで Saga だけを検証する場合は `SagaTesting` の `SagaTester` を使います。
@@ -650,7 +712,7 @@ import Testing
 
 #### 通信が重なる場合のテスト
 
-検索語の連続した変更、通信中のログアウト、結果の到着順の逆転などは、応答をテストから手動で返すスタブで再現します。通信中は Saga が止まらないため、`send` の代わりに待たずに送る `dispatch` を使い、Saga が出す Action は届くまで待つ `receive(_:timeout:)` で確かめます（`SagaTester` にも同じ API があります）。
+検索語の連続した変更、通信中のログアウト、結果の到着順の逆転などは、応答をテストから手動で返すスタブで再現します（次の例の `api` は、`respond(to:with:)` を呼ぶまで応答を返さない、テスト用に作った検索 API です）。通信中は Saga が止まらないため、`send` の代わりに待たずに送る `dispatch` を使い、Saga が出す Action は届くまで待つ `receive(_:timeout:)` で確かめます（`SagaTester` にも同じ API があります）。
 
 ```swift
 try store.dispatch(.search("a")) { $0.query = "a" }
@@ -682,13 +744,15 @@ Examples/
 
 ## ドキュメント
 
-- [変更履歴（CHANGELOG）](CHANGELOG.md)
-- [設計書](docs/design.md)
-- [ロードマップ](docs/roadmap.md)
+- [はじめかた](docs/getting-started.md)
+- [機能を組み合わせる](docs/composition.md)
 - [Saga の Effect](docs/saga-effects.md)
 - [State の永続化](docs/persistence.md)
 - [ミドルウェア](docs/middleware.md)
 - [ReSwift / ReSwift-Saga からの移行ガイド](docs/migration.md)
+- [変更履歴（CHANGELOG）](CHANGELOG.md)
+- [設計書](docs/design.md)
+- [ロードマップ](docs/roadmap.md)
 
 ## 背景
 
