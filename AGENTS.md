@@ -70,7 +70,13 @@
 
 - バージョンは Semantic Versioning。1.0.0 までは、マイナーバージョンでも公開 API が変わり得る。
 - 公開 API や振る舞いを変えた PR は、`CHANGELOG.md` の `Unreleased` に追記する。未リリースの機能の修正（利用者が一度も使っていない振る舞いの修正）は書かない。
-- リリースは PR で `CHANGELOG.md`（`## [0.1.0] - 日付` の節）と README のインストール手順を更新し、マージ後にタグ（`0.1.0` の形式、`v` を付けない）と GitHub Release を作る。タグと GitHub Release は公開されて取り消しにくいので、作る前に作者（@mitsuharu）に確認する。
+- バージョンの上げ方（1.0.0 まで）: 公開 API の追加・変更や、振る舞いの変更があればマイナー（`0.3.0`）、ドキュメントや互換性のある修正、同梱物（プライバシーマニフェストなど）だけならパッチ（`0.2.1`）。
+- リリースは PR で準備し、マージ後にタグ（`0.1.0` の形式、`v` を付けない）と GitHub Release を作る。タグと GitHub Release は公開されて取り消しにくいので、作る前に作者（@mitsuharu）に確認する。
+- リリースの PR では次の 3 つを更新する。
+  1. `CHANGELOG.md`: `Unreleased` の内容を `## [0.2.1] - 日付` の節に移し、末尾のリンクの定義（`[Unreleased]` の比較元と、新しいバージョンのリリースのページ）を更新する。節の中の文書へのリンクは、タグを指す絶対 URL（`https://github.com/mitsuharu/swift-redux-saga/blob/0.2.1/docs/...`）にする（リリースノートでは相対リンクが開けないため）。
+  2. README のインストール手順の `from:` のバージョン。
+  3. `docs/roadmap.md`: 前のリリースからの PR の行（リンク付き）と、リリースの PR の行。
+- リリースの PR を作ったら、Release ワークフローと同じ awk で CHANGELOG の節を取り出せることと、自動で作られる PR の一覧（`gh api -X POST repos/mitsuharu/swift-redux-saga/releases/generate-notes -f tag_name=<新> -f target_commitish=main -f previous_tag_name=<前>`）を確かめる。PR のタイトルがリリースノートに不向きなら（「試作」など）、PR のタイトルを直す。
 - タグと GitHub Release は Release ワークフロー（`.github/workflows/release.yml`）で作る。タグを push するか、Actions の画面から手動で実行してバージョンを入れる（タグがなければ、実行したブランチの先頭に打つ）。リリースノートは `CHANGELOG.md` の該当の節と、GitHub が自動で作る PR の一覧（前のリリースから）を並べたもの。CHANGELOG の節がなければ失敗する。
 
 ## 完了の定義（各 PR 共通）
