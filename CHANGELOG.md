@@ -4,16 +4,19 @@
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-12
+
 ### 追加
 
 - アプリに組み込まれるターゲットに、プライバシーマニフェスト（`PrivacyInfo.xcprivacy`）を同梱。`ReduxPersistence` は `UserDefaults` の利用（`C56D.1`）を申告し、ほかは情報の収集・追跡・理由の申告が必要な API の利用がないことを宣言する
 
 ### ドキュメント
 
-- [はじめかた](https://github.com/mitsuharu/swift-redux-saga/blob/main/docs/getting-started.md): カウンターのアプリを作りながら、State・Action・reducer・Store・Saga とテストの書き方を順に説明
-- [機能を組み合わせる](https://github.com/mitsuharu/swift-redux-saga/blob/main/docs/composition.md): 複数の機能を 1 つの Store にまとめる方法と、Saga を動かす期間の決め方
-- [State の永続化](https://github.com/mitsuharu/swift-redux-saga/blob/main/docs/persistence.md): 保存する部分の選び方、保存先、保存のタイミング、データの削除、保存形式の変更、テストの書き方
-- [ミドルウェア](https://github.com/mitsuharu/swift-redux-saga/blob/main/docs/middleware.md): ミドルウェアの作り方とよくある使い方、Saga との使い分け、同梱の `LoggingMiddleware` の設定
+- [はじめかた](https://github.com/mitsuharu/swift-redux-saga/blob/0.2.1/docs/getting-started.md): カウンターのアプリを作りながら、State・Action・reducer・Store・Saga とテストの書き方を順に説明
+- [機能を組み合わせる](https://github.com/mitsuharu/swift-redux-saga/blob/0.2.1/docs/composition.md): 複数の機能を 1 つの Store にまとめる方法と、Saga を動かす期間の決め方
+- [State の永続化](https://github.com/mitsuharu/swift-redux-saga/blob/0.2.1/docs/persistence.md): 保存する部分の選び方、保存先、保存のタイミング、データの削除、保存形式の変更、テストの書き方
+- [ミドルウェア](https://github.com/mitsuharu/swift-redux-saga/blob/0.2.1/docs/middleware.md): ミドルウェアの作り方とよくある使い方、Saga との使い分け、同梱の `LoggingMiddleware` の設定
+- README: 初めて読む人向けに、部品の役割と処理の流れの図、ターゲットの分け方（分けなくてもよいこと）、説明のなかった用語を追加
 
 ## [0.2.0] - 2026-10-11
 
@@ -72,6 +75,7 @@
 - `TestClock`、`SagaTester`、`TestStore`。実時間ではなく「すべての Saga が Effect で止まったか」で待ち合わせる
 - 通信が重なる場面のテスト（待たずに送る `dispatch` と、届くまで待つ `receive(_:timeout:)`）
 
-[Unreleased]: https://github.com/mitsuharu/swift-redux-saga/compare/0.2.0...HEAD
+[Unreleased]: https://github.com/mitsuharu/swift-redux-saga/compare/0.2.1...HEAD
+[0.2.1]: https://github.com/mitsuharu/swift-redux-saga/releases/tag/0.2.1
 [0.2.0]: https://github.com/mitsuharu/swift-redux-saga/releases/tag/0.2.0
 [0.1.0]: https://github.com/mitsuharu/swift-redux-saga/releases/tag/0.1.0

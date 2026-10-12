@@ -28,7 +28,7 @@ Swift 6 で書かれた Redux（[Redux Toolkit](https://redux-toolkit.js.org/) �
 
 ```swift
 dependencies: [
-  .package(url: "https://github.com/mitsuharu/swift-redux-saga.git", from: "0.2.0")
+  .package(url: "https://github.com/mitsuharu/swift-redux-saga.git", from: "0.2.1")
 ]
 ```
 
