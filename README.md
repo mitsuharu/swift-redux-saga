@@ -50,6 +50,15 @@ dependencies: [
 
 ### 例: Redux + Saga の SwiftUI アプリ
 
+次の例では、アプリを 2 つのターゲットに分けています。
+
+- `AppFeature`: State・Action・reducer・Saga を置くターゲットです。UI のフレームワークに依存しないので、Saga や reducer のテストを、アプリを起動せずに実行できます（`AppFeatureTests`）。
+- `App`: アプリ本体です。SwiftUI の View を置き、`AppFeature` の Store を表示します。
+
+このように分けるのは必須ではありません。小さなアプリなら、`App` のターゲットだけに `ReduxSaga` と `ReduxSwiftUI` を追加し、State も Saga も View も同じターゲットに書いてかまいません。
+
+それでも分けておくと、画面と状態管理の責務がターゲットの境界ではっきり分かれます。View を置かない `AppFeature` にロジックを集めるので、ロジックが View に紛れ込みにくくなります。同じように、通信やデータの保存などのビジネスロジック（UseCase / Repository）を本ライブラリに依存しない別のターゲットにすれば、ライブラリを入れ替えることになってもその部分は書き直さずに済みます（ロックインを避ける）。規模が大きくなりそうなアプリや、テストを手厚くしたいアプリでは、分けることをおすすめします。[サンプル](#サンプル)は、本ライブラリに依存しない `Domain`、状態管理の `AppFeature`、UI のアプリの 3 つに分けた構成です。
+
 ```swift
 targets: [
   .target(
@@ -72,6 +81,20 @@ targets: [
     dependencies: [
       "AppFeature",
       .product(name: "ReduxTesting", package: "swift-redux-saga"),
+    ]
+  ),
+]
+```
+
+1 つのターゲットにまとめる場合は、次のようになります。
+
+```swift
+targets: [
+  .target(
+    name: "App",
+    dependencies: [
+      .product(name: "ReduxSaga", package: "swift-redux-saga"),
+      .product(name: "ReduxSwiftUI", package: "swift-redux-saga"),       // 任意
     ]
   ),
 ]
