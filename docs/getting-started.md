@@ -16,14 +16,18 @@ swift-redux-saga は、アプリの状態を次の 5 つの部品で扱います
 
 処理の流れは、次のように一方向です。
 
-```
-View ──dispatch(Action)──▶ Store ──▶ reducer ──▶ 新しい State ──▶ View が再描画
-                             │                        ▲
-                             ▼                        │
-                           Saga ──（通信などの後に）put(Action)
+```mermaid
+flowchart LR
+  View -- dispatch --> Action
+  Action --> Middleware
+  Middleware --> Reducer
+  Reducer -- 新しい State --> Store
+  Store -- State を読んで表示 --> View
+  Middleware -- Action を渡す --> Saga
+  Saga -- "put（通信などの結果）" --> Action
 ```
 
-View は State を読んで表示し、ユーザーの操作を Action として Store に送ります（dispatch）。State を書き換えられるのは reducer だけなので、State がいつ、なぜ変わったかを Action の列として追えます。通信のように時間のかかる処理は Saga に任せ、結果も Action として Store に戻します。
+View は State を読んで表示し、ユーザーの操作を Action として Store に送ります（dispatch）。Action はミドルウェア（Action が reducer に届くまでの間に処理を挟む仕組み）を通って reducer に届きます。Saga も、ミドルウェアから Action を受け取ります。State を書き換えられるのは reducer だけなので、State がいつ、なぜ変わったかを Action の列として追えます。通信のように時間のかかる処理は Saga に任せ、結果も Action として Store に戻します。
 
 ## 準備
 
