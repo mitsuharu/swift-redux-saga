@@ -128,6 +128,16 @@ Redux ◀── ReduxSaga ──▶ Saga
 | `SagaTesting` | `Saga`, `SagaTesting` | Saga のテスト |
 | `ReduxTesting` | `Redux`, `Saga`, `ReduxSaga`, `SagaTesting`, `ReduxTesting` | Store と Saga のテスト |
 
+### プライバシーマニフェスト
+
+アプリに組み込まれるターゲット（`InternalPrimitives` / `Redux` / `Saga` / `ReduxSaga` / `ReduxSwiftUI` / `ReduxUIKit` / `ReduxMacros` / `ReduxPersistence`）には、`PrivacyInfo.xcprivacy` を resource（`.copy`）として置く。
+
+- 情報の収集（`NSPrivacyCollectedDataTypes`）と追跡（`NSPrivacyTracking` / `NSPrivacyTrackingDomains`）はしない。
+- 理由の申告が必要な API は、`ReduxPersistence` の `UserDefaultsStorage` が使う `UserDefaults` だけ。アプリが `UserDefaultsStorage` を使ったときにだけ呼ぶ、サードパーティ SDK のラッパーなので、理由は `C56D.1`（アプリが呼ぶラッパーの中でだけ UserDefaults を使う SDK のための理由）を申告する。保存先（`suiteName:`）もアプリが決める。
+- 該当する API を使わないターゲットにも空の宣言を置く。App Store の審査や、アプリのプライバシーレポート（Xcode の Generate Privacy Report）で「収集していない」ことを確認できるようにするため。
+- テスト支援（`SagaTesting` / `ReduxTesting`）はアプリに入らないので置かない。
+- 理由の申告が必要な API（UserDefaults、ファイルの日時、ディスクの空き容量、起動からの時間、キーボード）を新しく使うときは、そのターゲットのマニフェストに理由を追加する。
+
 ---
 
 ## 4. 並行性と隔離の方針

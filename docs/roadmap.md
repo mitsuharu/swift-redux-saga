@@ -166,3 +166,4 @@
 | 14-2 | `docs/middleware-guide` | ミドルウェアの作り方と `LoggingMiddleware` の解説（docs/middleware.md） （[#103](https://github.com/mitsuharu/swift-redux-saga/pull/103)） |
 | 14-3 | `docs/readme-target-layout` | README の例で、ターゲットを分ける理由と、分けなくてもよいことを書く （[#104](https://github.com/mitsuharu/swift-redux-saga/pull/104)） |
 | 14-4 | `docs/readme-newcomer-review` | 初めて読む人向けの見直し、はじめかた（docs/getting-started.md）と機能を組み合わせる（docs/composition.md） |
+| 14-5 | `feature/privacy-manifest` | アプリに組み込まれるターゲットにプライバシーマニフェストを同梱する |

@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### 追加
+
+- アプリに組み込まれるターゲットに、プライバシーマニフェスト（`PrivacyInfo.xcprivacy`）を同梱。`ReduxPersistence` は `UserDefaults` の利用（`C56D.1`）を申告し、ほかは情報の収集・追跡・理由の申告が必要な API の利用がないことを宣言する
+
 ### ドキュメント
 
 - [はじめかた](https://github.com/mitsuharu/swift-redux-saga/blob/main/docs/getting-started.md): カウンターのアプリを作りながら、State・Action・reducer・Store・Saga とテストの書き方を順に説明
