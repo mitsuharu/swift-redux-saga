@@ -107,6 +107,12 @@
 - 並行処理のテストは `TestClock` や `settle()` を使い、実時間や `Task.yield()` の回数に依存しない。フレーキーなテストを入れない。
 - キャンセル、エラー、競合するタイミングのケースを必ず含める。
 
+## TLA+ による仕様
+
+- 並行に動く部分のうち、割り込み順の不具合が出やすいところは `specs/tla/` に TLA+ のモデルを置き、TLC で検査する（使い方は [specs/tla/README.md](specs/tla/README.md)）。
+- モデルは実装を手で写したもので、自動では連動しない。モデル化した実装（`.github/workflows/tla.yml` の `paths` に挙げたファイル）の待ち方や順序を変えたら、同じ PR でモデルも直し、`specs/tla/check.sh` で確かめる。
+- 過去の不具合を再現する設定も残し、TLC が反例を見つけることを確かめる（何も検出できないモデルになっていないことの確認）。
+
 ## シミュレータ・実機での動作確認
 
 - Example アプリをシミュレータや実機で操作・確認するときは [callstack/agent-device](https://github.com/callstack/agent-device) を使う。

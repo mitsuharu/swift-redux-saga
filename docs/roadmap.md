@@ -168,3 +168,9 @@
 | 14-4 | `docs/readme-newcomer-review` | 初めて読む人向けの見直し、はじめかた（docs/getting-started.md）と機能を組み合わせる（docs/composition.md） （[#105](https://github.com/mitsuharu/swift-redux-saga/pull/105)） |
 | 14-5 | `feature/privacy-manifest` | アプリに組み込まれるターゲットにプライバシーマニフェストを同梱する （[#106](https://github.com/mitsuharu/swift-redux-saga/pull/106)） |
 | 14-6 | `docs/release-0.2.1` | 0.2.1 のリリース（CHANGELOG、README のインストール手順） |
+
+## M15: TLA+ による形式検証
+
+| # | ブランチ | 内容 |
+| --- | --- | --- |
+| 15-1 | `feature/tla-persistence` | `PersistenceMiddleware` の保存・削除の順序を TLA+ でモデル化し、TLC を CI で実行する |
