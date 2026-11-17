@@ -199,6 +199,81 @@ private let response = ActionPattern<Action, String>.case {
     try await tester.finish()
   }
 
+  @Test func allThrowsCancellationInACancelledCallerEvenIfTheOperationsReturnValues() async throws {
+    let tester = makeTester(
+      Saga { ctx in
+        let worker = ctx.fork { ctx in
+          do {
+            _ = try await ctx.take(response)
+          } catch is CancellationError {
+            do {
+              // キャンセルに応じずに値を返す処理
+              let (a, b) = try await ctx.all({ _ in "a" }, { _ in "b" })
+              await ctx.put(.result(a + b))
+            } catch is CancellationError {
+              await ctx.put(.result("cancelled"))
+            }
+          }
+        }
+        _ = try await ctx.take(.action(.start))
+        ctx.cancel(worker)
+        _ = try? await ctx.join(worker)
+      })
+    await tester.send(.start)
+    try tester.receive(.result("cancelled"))
+    try await tester.finish()
+  }
+
+  @Test func allThrowsCancellationInsteadOfAFailureInACancelledCaller() async throws {
+    let tester = makeTester(
+      Saga { ctx in
+        let worker = ctx.fork { ctx in
+          do {
+            _ = try await ctx.take(response)
+          } catch is CancellationError {
+            do {
+              _ = try await ctx.all({ _ -> Int in throw TestError() }, { _ in 1 })
+              await ctx.put(.result("returned"))
+            } catch is CancellationError {
+              await ctx.put(.result("cancelled"))
+            } catch {
+              await ctx.put(.failed)
+            }
+          }
+        }
+        _ = try await ctx.take(.action(.start))
+        ctx.cancel(worker)
+        _ = try? await ctx.join(worker)
+      })
+    await tester.send(.start)
+    try tester.receive(.result("cancelled"))
+    try await tester.finish()
+  }
+
+  @Test func raceThrowsCancellationInACancelledCallerEvenIfTheWinnerReturnsAValue() async throws {
+    let tester = makeTester(
+      Saga { ctx in
+        let worker = ctx.fork { ctx in
+          do {
+            _ = try await ctx.take(response)
+          } catch is CancellationError {
+            do {
+              let (a, _) = try await ctx.race({ _ in "a" }, { ctx in try await ctx.take(response) })
+              await ctx.put(.result(a ?? "nil"))
+            } catch is CancellationError {
+              await ctx.put(.result("cancelled"))
+            }
+          }
+        }
+        _ = try await ctx.take(.action(.start))
+        ctx.cancel(worker)
+        _ = try? await ctx.join(worker)
+      })
+    await tester.send(.start)
+    try tester.receive(.result("cancelled"))
+    try await tester.finish()
+  }
+
   @Test func cancellingTheCallerCancelsEveryOperation() async throws {
     let clock = TestClock()
     let tester = makeTester(
