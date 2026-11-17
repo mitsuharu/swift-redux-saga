@@ -79,6 +79,31 @@ branch は成功・失敗（本体か、本体が fork した子の失敗）・�
 
 確かめない設定は、このモデルを書いて見つかった問題を直す前の実装です。反例は、branch が失敗して終わった後、`all` がそのエラーを投げる前に呼び出し元がキャンセルされる、というものでした（`race` では、キャンセル後にキャンセルに応じない branch が値を返し、その値が返る）。
 
+## StoreObservation.tla
+
+Store のキーパス単位の通知と `scope`（`Sources/Redux/Store.swift`）、`Store.observe`（`Sources/Redux/StoreObservation.swift`）のモデルです。
+View や `ObservationToken`（観測者）は State のプロパティを読み、Observation に 1 回きりの購読を登録します。Store は読まれたキーパスを表に持ち、値が変わったキーパスを表から外して通知します。値が変わらないまま読まれなくなったキーパスは、一定の更新回数ごとの掃除で表から外し、そのときも通知します。通知を受けた観測者は、変更の後にメインアクターで読み直します。
+`scope` で作った子の Store は親の State の一部を持ち、親の通知の後に新しい値を知らされて、自分の表で同じように通知します。
+Store はメインアクターで動くので、更新（dispatch から通知まで）と読み直しは、それぞれ割り込まれない手順として扱います。調べるのは、観測者の読み方（どのプロパティを読むか、親か子か）、更新と読み直しの順序、掃除の時期の組み合わせです。
+
+調べる性質は次の 3 つです。
+
+- `SubscribedKeysAreTracked`: 購読している観測者が読んだキーパスは、その Store の表にある（表から外れたまま、変化が通知されない購読がない）。
+- `SubscribedObserverIsUpToDate`: 通知を待っていない観測者は、最新の値を見ている（値が変わったのに通知されない観測者がいない）。
+- `EventuallyUpToDate`: 更新が止まれば、すべての観測者がいつか最新の値を見る。
+
+モデルにしていないことは、`TrackedState` の入れ子のキーパス（`nestedKeyPaths`）、`state` 全体の読み取り（常に通知される）、Action の再入（`pendingActions` に積まれ、後の更新として扱える）、通知の中での `scope` の呼び出し（#69 の排他アクセスの問題は Swift の実行時の検査の話で、順序の問題ではない）です。
+
+| 設定 | 内容 | 期待する結果 |
+| --- | --- | --- |
+| `StoreObservation.cfg` | 実装どおり（更新 2 回ごとに掃除） | 違反なし |
+| `StoreObservation_SweepEveryUpdate.cfg` | 実装どおり（更新のたびに掃除） | 違反なし |
+| `StoreObservation_SweepWithoutNotify.cfg` | 掃除でキーパスを外すときに通知しない | 違反あり |
+| `StoreObservation_SyncReread.cfg` | 通知の中でその場で読み直す（`Store.observe` が `Task` を挟まない） | 違反あり |
+
+`StoreObservation_SweepWithoutNotify.cfg` の反例は、1 つ目のプロパティを読んだ観測者がいる間に 2 つ目だけが 2 回変わり、掃除で 1 つ目が黙って表から外れ、その後に 1 つ目が変わっても通知されない、というものです（#76 で掃除のときに通知するようにした理由）。
+`StoreObservation_SyncReread.cfg` の反例は、通知（willSet）の中で読み直すと、まだ代入される前の古い値を読み、新しい購読を登録した後に値が変わるので、観測者が古い値のまま止まる、というものです（`Store.observe` が `Task` を挟んで読み直す理由）。
+
 ## 実行のしかた
 
 Java 11 以降と [tla2tools.jar](https://github.com/tlaplus/tlaplus/releases)（CI と同じ v1.7.4）が要ります。
@@ -100,5 +125,5 @@ java -XX:+UseParallelGC -cp path/to/tla2tools.jar tlc2.TLC -workers auto -cleanu
 ## 実装を変えたとき
 
 モデルは実装を手で写したものなので、実装と自動では連動しません。
-`PersistenceMiddleware` の `schedule` / `flush()` / `clear()` の待ち方や、`ChannelCore` のロックの中の処理と resume の順序や、`all` / `race` / `waitForAny` の待ち方と終わり方の判断を変えたら、同じ PR でモデルも直し、TLC で確かめてください。
+`PersistenceMiddleware` の `schedule` / `flush()` / `clear()` の待ち方や、`ChannelCore` のロックの中の処理と resume の順序や、`all` / `race` / `waitForAny` の待ち方と終わり方の判断や、Store の通知・キーパスの表の掃除・`scope` の伝達・`Store.observe` の読み直しの時期を変えたら、同じ PR でモデルも直し、TLC で確かめてください。
 モデルを足したら、`check.sh` の表と `.github/workflows/tla.yml` の `paths` に、設定とモデル化した実装のファイルを足してください。
