@@ -26,6 +26,33 @@ Swift のテストは実際に起きた 1 つの順序しか確かめられま�
 | `PersistenceMiddleware_ClearNotChained.cfg` | `clear()` が後続の保存を待たせない | 違反あり |
 | `PersistenceMiddleware_SaveNotSerialized.cfg` | 保存が前の保存・削除を待たない | 違反あり |
 
+## Channel.tla
+
+Saga のチャネル（`Sources/Saga/Internal/ChannelCore.swift`）の `put` / `take` / `close` と、受け取り側のキャンセルのモデルです。バッファの方式は上限なし（`.unbounded`）を扱います。
+複数の受け取り側（ワーカー）が `take` を繰り返し、送り手が値を入れ、どこかで `close` され、受け取り側のタスクはいつでもキャンセルされ得る、という状況のあらゆる割り込み順を調べます。
+実装はロックの中で待っている continuation を取り出し、ロックの外で resume するので、モデルでもこの 2 つを別の手順にして、間に割り込めるようにしています。
+
+調べる性質は次の 6 つです。
+
+- `NoDoubleResume`: 1 つの continuation を 2 回 resume しない。
+- `NoLossInOrder`: 閉じる前に入れた値は、失われず、重複せず、入れた順に受け取り側へ渡る。
+- `ErrorAtMostOnce`: `close(throwing:)` に渡したエラーは高々 1 回だけ投げる。
+- `CancelledTakeConsumesNothing`: キャンセル済みのタスクの `take` は、値も終了理由も消費しない（`SagaChannel.take()` のドキュメントの約束）。
+- `NoTakerLeftWaiting`: 閉じたら、待っている受け取り側は必ず戻る。
+- `CancelledTakerReturns`: キャンセルされた受け取り側は必ず `take` から戻る。
+
+待っている間にキャンセルされた受け取り側に、送り手が先に値を渡すことはあります（そのときは `CancellationError` ではなく値が返ります）。値は失われないので、性質としては許しています。
+モデルにしていないことは、上限のあるバッファ（`.newest` / `.oldest`。値を捨てるのが仕様）、`onClose` のハンドラ、`Activity` による待ちの数え方です。
+
+| 設定 | 内容 | 期待する結果 |
+| --- | --- | --- |
+| `Channel.cfg` | 実装どおり（`close` にエラーを渡さない） | 違反なし |
+| `Channel_CloseWithError.cfg` | 実装どおり（`close` にエラーを渡す） | 違反なし |
+| `Channel_NoCancelGuard.cfg` | `take` のロックの中で `Task.isCancelled` を確かめない | 違反あり |
+| `Channel_FailureNotCleared.cfg` | 終了理由のエラーを投げた後も消さない | 違反あり |
+
+`Channel_NoCancelGuard.cfg` の反例は、`onCancel` が待機の登録より先に走って何も外せず、その後に登録した受け取り側が二度と戻らない、というものです（性質を `CancelledTakerReturns` だけにすると、この反例が出ます）。
+
 ## 実行のしかた
 
 Java 11 以降と [tla2tools.jar](https://github.com/tlaplus/tlaplus/releases)（CI と同じ v1.7.4）が要ります。
@@ -47,5 +74,5 @@ java -XX:+UseParallelGC -cp path/to/tla2tools.jar tlc2.TLC -workers auto -cleanu
 ## 実装を変えたとき
 
 モデルは実装を手で写したものなので、実装と自動では連動しません。
-`PersistenceMiddleware` の `schedule` / `flush()` / `clear()` の待ち方を変えたら、同じ PR でモデルも直し、TLC で確かめてください。
+`PersistenceMiddleware` の `schedule` / `flush()` / `clear()` の待ち方や、`ChannelCore` のロックの中の処理と resume の順序を変えたら、同じ PR でモデルも直し、TLC で確かめてください。
 モデルを足したら、`check.sh` の表と `.github/workflows/tla.yml` の `paths` に、設定とモデル化した実装のファイルを足してください。
