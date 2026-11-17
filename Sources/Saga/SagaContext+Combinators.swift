@@ -6,7 +6,8 @@ extension SagaContext {
   /// 各処理は子として fork され、それぞれの ``SagaContext`` を受け取ります。
   /// いずれかが失敗すると、残りをキャンセルしてそのエラーを投げます。処理の中で fork した子の失敗も含め、
   /// エラーは呼び出し元で catch できます。いずれかがキャンセルで終わった場合も、残りをキャンセルして
-  /// `CancellationError` を投げます。
+  /// `CancellationError` を投げます。呼び出し元がキャンセルされた後は、結果がそろっていても、処理が失敗していても
+  /// `CancellationError` を投げます（``call(_:_:)`` と同じ）。
   ///
   /// ```swift
   /// let (user, posts) = try await ctx.all(
@@ -31,6 +32,9 @@ extension SagaContext {
         break
       case .failed(let error):
         for task in tasks { task.cancel() }
+        // 呼び出し元がキャンセルされた後のエラーをそのまま投げると、ワーカーの catch が古い失敗を
+        // Action にするため、call と同じくキャンセルとして投げる。
+        try Task.checkCancellation()
         throw error
       case .cancelled:
         // 1 つでもキャンセルで終わったら、すべての結果はそろわないので、残りを待たずにキャンセルとして投げる。
@@ -38,6 +42,9 @@ extension SagaContext {
         throw CancellationError()
       }
     }
+    // 処理がキャンセルに応じずに値を返した場合や、終わった直後に呼び出し元がキャンセルされた場合も、
+    // takeLatest で止めたはずの古い結果を put させないよう、call と同じく戻る前に確かめる。
+    try Task.checkCancellation()
     return (repeat try (each branches).value())
   }
 
@@ -46,7 +53,8 @@ extension SagaContext {
   /// 戻り値は、最初に終わった処理の位置だけが値を持ち、残りは `nil` のタプルです。
   /// 負けた処理はキャンセルします。最初に終わった処理が失敗した場合は、そのエラーを投げます
   /// （処理の中で fork した子の失敗を含みます）。最初に終わった処理がキャンセルで終わった場合は
-  /// `CancellationError` を投げます。
+  /// `CancellationError` を投げます。呼び出し元がキャンセルされた後は、勝者の値やエラーではなく
+  /// `CancellationError` を投げます（``call(_:_:)`` と同じ）。
   ///
   /// ```swift
   /// let (response, timeout): (Response?, Void?) = try await ctx.race(
@@ -73,6 +81,8 @@ extension SagaContext {
     for (index, task) in tasks.enumerated() where index != winner {
       task.cancel()
     }
+    // 勝者の値やエラーを、呼び出し元がキャンセルされた後に返さない（all と同じ理由）。
+    try Task.checkCancellation()
     switch outcome(of: winner, in: repeat each branches) {
     case .completed:
       break
