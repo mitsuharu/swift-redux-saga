@@ -4,9 +4,16 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-17
+
 ### 修正
 
 - `all` / `race`: 呼び出し元がキャンセルされた後は、処理の結果やエラーを返さず `CancellationError` を投げる（`call` と同じ）。キャンセルに応じない処理が値を返した場合や、処理が終わった直後にキャンセルされた場合に、`takeLatest` で止めたはずの古い結果や失敗が put されることがあった
+
+### ドキュメント
+
+- `SagaChannel.take()`: 待っている間のキャンセルとほぼ同時に値が入れられたり、チャネルが閉じられたりした場合は、`CancellationError` ではなく先に渡された値（`nil` や終了理由のエラー）を返すことがあると明記
+- [TLA+ による仕様](https://github.com/mitsuharu/swift-redux-saga/blob/0.3.0/specs/tla/README.md): State の永続化の保存・削除の順序、チャネル、`all` / `race`、Store の通知と `scope` を TLA+ でモデル化し、関係する実装が変わる PR ごとに TLC で検査する
 
 ## [0.2.1] - 2026-10-12
 
@@ -79,7 +86,8 @@
 - `TestClock`、`SagaTester`、`TestStore`。実時間ではなく「すべての Saga が Effect で止まったか」で待ち合わせる
 - 通信が重なる場面のテスト（待たずに送る `dispatch` と、届くまで待つ `receive(_:timeout:)`）
 
-[Unreleased]: https://github.com/mitsuharu/swift-redux-saga/compare/0.2.1...HEAD
+[Unreleased]: https://github.com/mitsuharu/swift-redux-saga/compare/0.3.0...HEAD
+[0.3.0]: https://github.com/mitsuharu/swift-redux-saga/releases/tag/0.3.0
 [0.2.1]: https://github.com/mitsuharu/swift-redux-saga/releases/tag/0.2.1
 [0.2.0]: https://github.com/mitsuharu/swift-redux-saga/releases/tag/0.2.0
 [0.1.0]: https://github.com/mitsuharu/swift-redux-saga/releases/tag/0.1.0
