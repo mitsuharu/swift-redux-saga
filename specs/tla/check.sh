@@ -20,6 +20,10 @@ checks=(
   "Channel Channel_CloseWithError.cfg pass"
   "Channel Channel_NoCancelGuard.cfg fail"
   "Channel Channel_FailureNotCleared.cfg fail"
+  "AllRace All.cfg pass"
+  "AllRace Race.cfg pass"
+  "AllRace All_NoCancelCheckAtReturn.cfg fail"
+  "AllRace Race_NoCancelCheckAtReturn.cfg fail"
 )
 
 status=0
