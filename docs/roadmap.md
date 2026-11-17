@@ -176,5 +176,5 @@
 | 15-1 | `feature/tla-persistence` | `PersistenceMiddleware` の保存・削除の順序を TLA+ でモデル化し、TLC を CI で実行する （[#109](https://github.com/mitsuharu/swift-redux-saga/pull/109)） |
 | 15-2 | `feature/tla-channel` | Saga のチャネルの put / take / close とキャンセルを TLA+ でモデル化する （[#110](https://github.com/mitsuharu/swift-redux-saga/pull/110)） |
 | 15-3 | `fix/channel-cancelled-take` | キャンセル済みの take が空のチャネルで待ち続けないことのテストと、キャンセルと値の受け渡しの競合のドキュメント （[#111](https://github.com/mitsuharu/swift-redux-saga/pull/111)） |
-| 15-4 | `fix/all-race-cancelled-caller` | `all` / `race` は呼び出し元のキャンセル後に結果やエラーを返さない |
-| 15-5 | `feature/tla-all-race` | `all` / `race` と `waitForAny` の待ち合わせを TLA+ でモデル化する |
+| 15-4 | `fix/all-race-cancelled-caller` | `all` / `race` は呼び出し元のキャンセル後に結果やエラーを返さない （[#112](https://github.com/mitsuharu/swift-redux-saga/pull/112)） |
+| 15-5 | `feature/tla-all-race` | `all` / `race` と `waitForAny` の待ち合わせを TLA+ でモデル化する （[#113](https://github.com/mitsuharu/swift-redux-saga/pull/113)） |
