@@ -1,0 +1,4 @@
+# TLC が作る作業用のファイルと反例のトレース
+states/
+*_TTrace_*
+tla2tools.jar
