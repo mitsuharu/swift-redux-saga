@@ -174,3 +174,4 @@
 | # | ブランチ | 内容 |
 | --- | --- | --- |
 | 15-1 | `feature/tla-persistence` | `PersistenceMiddleware` の保存・削除の順序を TLA+ でモデル化し、TLC を CI で実行する （[#109](https://github.com/mitsuharu/swift-redux-saga/pull/109)） |
+| 15-2 | `feature/tla-channel` | Saga のチャネルの put / take / close とキャンセルを TLA+ でモデル化する |

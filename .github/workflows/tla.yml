@@ -16,6 +16,7 @@ on:
       - "specs/tla/**"
       - ".github/workflows/tla.yml"
       - "Sources/ReduxPersistence/PersistenceMiddleware.swift"
+      - "Sources/Saga/Internal/ChannelCore.swift"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}

@@ -16,6 +16,10 @@ checks=(
   "PersistenceMiddleware PersistenceMiddleware.cfg pass"
   "PersistenceMiddleware PersistenceMiddleware_ClearNotChained.cfg fail"
   "PersistenceMiddleware PersistenceMiddleware_SaveNotSerialized.cfg fail"
+  "Channel Channel.cfg pass"
+  "Channel Channel_CloseWithError.cfg pass"
+  "Channel Channel_NoCancelGuard.cfg fail"
+  "Channel Channel_FailureNotCleared.cfg fail"
 )
 
 status=0
