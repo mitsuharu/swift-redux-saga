@@ -22,10 +22,11 @@ status=0
 for entry in "${checks[@]}"; do
   read -r module config expected <<<"$entry"
   log="$(mktemp)"
+  metadir="$(mktemp -d)"
   # TLC は違反を見つけると 0 以外で終わる。仕様の誤り（構文やエラー）と区別するため、出力も見る。
   set +e
   java -XX:+UseParallelGC -cp "$jar" tlc2.TLC -workers auto -cleanup \
-    -metadir "$(mktemp -d)" -config "$config" "$module.tla" >"$log" 2>&1
+    -metadir "$metadir" -config "$config" "$module.tla" >"$log" 2>&1
   code=$?
   set -e
   if [[ $code -eq 0 ]] && grep -q "No error has been found" "$log"; then
@@ -42,6 +43,6 @@ for entry in "${checks[@]}"; do
     cat "$log"
     status=1
   fi
-  rm -f "$log"
+  rm -rf "$log" "$metadir"
 done
 exit $status
