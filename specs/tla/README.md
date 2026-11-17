@@ -53,6 +53,32 @@ Saga のチャネル（`Sources/Saga/Internal/ChannelCore.swift`）の `put` / `
 
 `Channel_NoCancelGuard.cfg` の反例は、`onCancel` が待機の登録より先に走って何も外せず、その後に登録した受け取り側が二度と戻らない、というものです（性質を `CancelledTakerReturns` だけにすると、この反例が出ます）。
 
+## AllRace.tla
+
+`all` / `race`（`Sources/Saga/SagaContext+Combinators.swift`）のモデルです。
+呼び出し元が、fork した処理（branch）の終わりを `waitForAny` で待ち、終わり方に応じて値を返す、エラーを投げる、残りをキャンセルする、という流れを書いています。
+branch は成功・失敗（本体か、本体が fork した子の失敗）・キャンセルのどれでも終わり得て、キャンセルに応じずに値を返すこともあります。呼び出し元もいつでもキャンセルされ得ます。
+`waitForAny` は待ちごとに 1 回だけ取り出せる continuation（gate）を作り、branch の終わりを知らせる observer と `onCancel` のうち先に取った方だけが再開します。前の待ちの observer が後から呼ばれても新しい待ちに触れないことを、待ちの世代で表しています。
+
+調べる性質は次の 7 つです。
+
+- `NoDoubleResume`: 1 つの待ちを 2 回再開しない。
+- `NoStaleOutcome`: 呼び出し元がキャンセルされた後に、値やエラーを返さない（`call` と同じく、`takeLatest` で止めたはずの古い結果を put させない）。
+- `NoOrphanBranch`: 戻ったとき、終わっていない branch はすべてキャンセルを要求されている。
+- `ValueIsReal` / `ErrorIsReal` / `CancelIsReal`: 値・エラー・`CancellationError` は、それぞれ対応する branch の終わり方があるときだけ返す。
+- `EventuallyReturns`: 必ず戻る（待ちが失われない）。
+
+モデルにしていないことは、`SagaMonitor` への通知、`Activity` による待ちの数え方、branch の中の Effect の詳細です（branch は「成功・失敗・キャンセルのどれかで終わるもの」として扱います）。
+
+| 設定 | 内容 | 期待する結果 |
+| --- | --- | --- |
+| `All.cfg` | `all`、branch 3 つ、実装どおり | 違反なし |
+| `Race.cfg` | `race`、branch 3 つ、実装どおり | 違反なし |
+| `All_NoCancelCheckAtReturn.cfg` | `all` が戻る前に呼び出し元のキャンセルを確かめない | 違反あり |
+| `Race_NoCancelCheckAtReturn.cfg` | `race` が戻る前に呼び出し元のキャンセルを確かめない | 違反あり |
+
+確かめない設定は、このモデルを書いて見つかった問題を直す前の実装です。反例は、branch が失敗して終わった後、`all` がそのエラーを投げる前に呼び出し元がキャンセルされる、というものでした（`race` では、キャンセル後にキャンセルに応じない branch が値を返し、その値が返る）。
+
 ## 実行のしかた
 
 Java 11 以降と [tla2tools.jar](https://github.com/tlaplus/tlaplus/releases)（CI と同じ v1.7.4）が要ります。
@@ -74,5 +100,5 @@ java -XX:+UseParallelGC -cp path/to/tla2tools.jar tlc2.TLC -workers auto -cleanu
 ## 実装を変えたとき
 
 モデルは実装を手で写したものなので、実装と自動では連動しません。
-`PersistenceMiddleware` の `schedule` / `flush()` / `clear()` の待ち方や、`ChannelCore` のロックの中の処理と resume の順序を変えたら、同じ PR でモデルも直し、TLC で確かめてください。
+`PersistenceMiddleware` の `schedule` / `flush()` / `clear()` の待ち方や、`ChannelCore` のロックの中の処理と resume の順序や、`all` / `race` / `waitForAny` の待ち方と終わり方の判断を変えたら、同じ PR でモデルも直し、TLC で確かめてください。
 モデルを足したら、`check.sh` の表と `.github/workflows/tla.yml` の `paths` に、設定とモデル化した実装のファイルを足してください。
