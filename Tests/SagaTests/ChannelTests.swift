@@ -55,6 +55,37 @@ private func makeTester(_ saga: Saga<Int, Action>) -> SagaTester<Int, Action> {
     try await tester.finish()
   }
 
+  // キャンセル済みのタスクでは onCancel が take の待機の登録より先に走り、何も外せない。
+  // ロックの中でキャンセルを確かめないと、登録した受け取り側を resume する人がいなくなり、戻らなくなる。
+  // 戻らない場合にテスト全体が止まらないよう、時間の上限を付ける。
+  @Test(.timeLimit(.minutes(1)))
+  func aCancelledConsumerThrowsInsteadOfWaitingOnAnEmptyChannel() async throws {
+    let tester = makeTester(
+      Saga { ctx in
+        let requests = ctx.actionChannel(request)
+        let consumer = ctx.fork { ctx in
+          do {
+            _ = try await ctx.take(.action(.request(-1)))
+          } catch is CancellationError {
+            do {
+              _ = try await requests.take()
+              await ctx.put(.event("returned"))
+            } catch is CancellationError {
+              await ctx.put(.event("cancelled"))
+            }
+          }
+        }
+        _ = try await ctx.take(.action(.stop))
+        ctx.cancel(consumer)
+        _ = try? await ctx.join(consumer)
+        await ctx.put(.closed)
+      })
+    await tester.send(.stop)
+    #expect(tester.unreceivedActions == [.event("cancelled"), .closed])
+    tester.skipReceivedActions()
+    try await tester.finish()
+  }
+
   @Test func actionChannelQueuesActionsSoTheyAreHandledOneByOneInOrder() async throws {
     let tester = makeTester(
       Saga { ctx in

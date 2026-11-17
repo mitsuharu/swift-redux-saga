@@ -19,6 +19,9 @@ public struct SagaChannel<Value: Sendable>: Sendable, AsyncSequence {
   ///
   /// - Throws: 呼び出す前か待っている間にキャンセルされた場合は `CancellationError`。
   ///   キャンセル済みなら、バッファの値やチャネルの終了理由は消費しません。
+  ///   ただし、待っている間のキャンセルとほぼ同時に値が入れられたり、チャネルが閉じられたりした場合は、
+  ///   先に渡された値（閉じられた場合は `nil` か終了理由のエラー）を返すことがあります
+  ///   （値は失われません。キャンセルを確かめるのは次の `take()` です）。
   public func take() async throws -> Value? {
     try await core.take()
   }
