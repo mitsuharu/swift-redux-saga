@@ -1,0 +1,50 @@
+# TLA+ のモデル（specs/tla）を TLC で検査する。
+#
+# ci.yml とは別のワークフローにするのは、モデルとモデル化した実装が変わったときだけ実行するため。
+# ci.yml は Swift のビルドとテストが目的で、パスの条件が異なる。
+#
+# アクションはタグではなくコミット SHA で固定している（ルールは AGENTS.md）。
+
+name: TLA+
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    # モデルを書いた実装のファイルもここに足す。モデルと実装は自動では連動しないため、
+    # 実装だけ変わった PR でもモデルの検査を走らせ、レビューでモデルの更新漏れに気づけるようにする。
+    paths:
+      - "specs/tla/**"
+      - ".github/workflows/tla.yml"
+      - "Sources/ReduxPersistence/PersistenceMiddleware.swift"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # 安定版（v1.8.0 は更新され続けるプレリリースで、中身が変わり得るため使わない）。
+  # sha256 は v1.7.4 のリリースの tla2tools.jar から計算した値。中身が変わったら失敗させる。
+  TLA_TOOLS_VERSION: v1.7.4
+  TLA_TOOLS_SHA256: 936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88
+
+jobs:
+  tlc:
+    name: TLC
+    # TLC は Java だけで動くので、安価な Linux で実行する。
+    # ubuntu-24.04 の runner イメージには Java が入っているため、setup-java は使わない。
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: tla2tools.jar の取得
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/tla2tools.jar" \
+            "https://github.com/tlaplus/tlaplus/releases/download/${TLA_TOOLS_VERSION}/tla2tools.jar"
+          echo "${TLA_TOOLS_SHA256}  $RUNNER_TEMP/tla2tools.jar" | sha256sum --check
+      - name: java -version
+        run: java -version
+      - name: TLC による検査
+        run: specs/tla/check.sh "$RUNNER_TEMP/tla2tools.jar"

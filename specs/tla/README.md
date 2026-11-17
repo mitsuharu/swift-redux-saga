@@ -26,15 +26,24 @@ Swift のテストは実際に起きた 1 つの順序しか確かめられま�
 
 ## 実行のしかた
 
-Java 11 以降と [tla2tools.jar](https://github.com/tlaplus/tlaplus/releases) が要ります。
+Java 11 以降と [tla2tools.jar](https://github.com/tlaplus/tlaplus/releases)（CI と同じ v1.7.4）が要ります。
+`check.sh` は、実装どおりの設定に違反がないことと、不具合を再現する設定に違反が見つかることをまとめて確かめます。
+PR では `.github/workflows/tla.yml` が同じスクリプトを実行します。
+
+```sh
+specs/tla/check.sh path/to/tla2tools.jar
+```
+
+1 つの設定だけを調べ、反例の手順を読みたいときは TLC を直接実行します。
 
 ```sh
 cd specs/tla
-java -XX:+UseParallelGC -cp tla2tools.jar tlc2.TLC -workers auto -cleanup \
-  -config PersistenceMiddleware.cfg PersistenceMiddleware.tla
+java -XX:+UseParallelGC -cp path/to/tla2tools.jar tlc2.TLC -workers auto -cleanup \
+  -config PersistenceMiddleware_ClearNotChained.cfg PersistenceMiddleware.tla
 ```
 
 ## 実装を変えたとき
 
 モデルは実装を手で写したものなので、実装と自動では連動しません。
 `PersistenceMiddleware` の `schedule` / `flush()` / `clear()` の待ち方を変えたら、同じ PR でモデルも直し、TLC で確かめてください。
+モデルを足したら、`check.sh` の表と `.github/workflows/tla.yml` の `paths` に、設定とモデル化した実装のファイルを足してください。

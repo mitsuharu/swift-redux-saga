@@ -23,6 +23,8 @@ on:
       - "**.md"
       - "docs/**"
       - "LICENSE"
+      # TLA+ のモデルは Swift のビルドに関係しない。検査は tla.yml で行う。
+      - "specs/**"
 
 # 同じ PR に新しいコミットが積まれたら、古い実行は結果が不要になるのでキャンセルする。
 concurrency:
