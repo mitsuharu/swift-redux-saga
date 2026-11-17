@@ -24,6 +24,10 @@ checks=(
   "AllRace Race.cfg pass"
   "AllRace All_NoCancelCheckAtReturn.cfg fail"
   "AllRace Race_NoCancelCheckAtReturn.cfg fail"
+  "StoreObservation StoreObservation.cfg pass"
+  "StoreObservation StoreObservation_SweepEveryUpdate.cfg pass"
+  "StoreObservation StoreObservation_SweepWithoutNotify.cfg fail"
+  "StoreObservation StoreObservation_SyncReread.cfg fail"
 )
 
 status=0

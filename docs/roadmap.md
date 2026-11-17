@@ -178,3 +178,4 @@
 | 15-3 | `fix/channel-cancelled-take` | キャンセル済みの take が空のチャネルで待ち続けないことのテストと、キャンセルと値の受け渡しの競合のドキュメント （[#111](https://github.com/mitsuharu/swift-redux-saga/pull/111)） |
 | 15-4 | `fix/all-race-cancelled-caller` | `all` / `race` は呼び出し元のキャンセル後に結果やエラーを返さない （[#112](https://github.com/mitsuharu/swift-redux-saga/pull/112)） |
 | 15-5 | `feature/tla-all-race` | `all` / `race` と `waitForAny` の待ち合わせを TLA+ でモデル化する （[#113](https://github.com/mitsuharu/swift-redux-saga/pull/113)） |
+| 15-6 | `feature/tla-store-observation` | Store のキーパス単位の通知、掃除、`scope`、`Store.observe` を TLA+ でモデル化する （[#114](https://github.com/mitsuharu/swift-redux-saga/pull/114)） |

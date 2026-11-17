@@ -19,6 +19,8 @@ on:
       - "Sources/Saga/Internal/ChannelCore.swift"
       - "Sources/Saga/SagaContext+Combinators.swift"
       - "Sources/Saga/SagaTask.swift"
+      - "Sources/Redux/Store.swift"
+      - "Sources/Redux/StoreObservation.swift"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
